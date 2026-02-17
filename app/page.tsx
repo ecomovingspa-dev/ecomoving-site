@@ -261,7 +261,7 @@ export default function Home() {
           <img src="https://xgdmyjzyejjmwdqkufhp.supabase.co/storage/v1/object/public/logo_ecomoving/Logo_horizontal.png" alt="Ecomoving Logo" className="logo-img-footer" />
         </div>
         <div style={{ fontSize: '0.8rem', color: '#555', letterSpacing: '4px', marginBottom: '30px' }}>CHILE &bull; SUSTENTABILIDAD &bull; DISEÑO</div>
-        <div style={{ fontSize: '0.7rem', color: '#333' }}>© {new Date().getFullYear()} TODOS LOS DERECHOS RESERVADOS</div>
+        <div style={{ fontSize: '0.7rem', color: '#333' }}>© 2026 TODOS LOS DERECHOS RESERVADOS</div>
       </footer>
 
       <style jsx global>{`
