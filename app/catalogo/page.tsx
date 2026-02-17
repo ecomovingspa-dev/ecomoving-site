@@ -4,7 +4,6 @@ import React, { useState } from 'react';
 import ProductCatalog from '@/components/ProductCatalog';
 import CatalogLeadMagnet from '@/components/CatalogLeadMagnet';
 import Link from 'next/link';
-import { Search } from 'lucide-react';
 
 export default function CatalogPage() {
     const [search, setSearch] = useState('');
@@ -33,32 +32,9 @@ export default function CatalogPage() {
                     </p>
                 </div>
                 <div style={{ marginTop: '40px', fontSize: '0.6rem', color: '#222', letterSpacing: '2px' }}>
-                    &copy; {new Date().getFullYear()} ECOMOVING SPA. TODOS LOS DERECHOS RESERVADOS.
+                    &copy; 2026 ECOMOVING SPA. TODOS LOS DERECHOS RESERVADOS.
                 </div>
             </footer>
-
-            <style jsx>{`
-                .nav-premium {
-                    position: fixed;
-                    top: 0;
-                    width: 100%;
-                    z-index: 1000;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    padding: 20px 50px;
-                    background: rgba(0,0,0,0.8);
-                    backdrop-filter: blur(20px);
-                    border-bottom: 1px solid rgba(255,255,255,0.05);
-                }
-                .logo-img {
-                    height: 25px;
-                    width: auto;
-                }
-                .nav-item-link:hover {
-                    color: var(--accent-turquoise) !important;
-                }
-            `}</style>
         </main>
     );
 }
