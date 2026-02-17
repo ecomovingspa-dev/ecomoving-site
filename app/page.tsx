@@ -218,7 +218,7 @@ export default function Home() {
         }}
       />
 
-      <nav className='nav-master'>
+      <nav className='nav-master-public'>
         <div className='logo-brand'>
           <img src="https://xgdmyjzyejjmwdqkufhp.supabase.co/storage/v1/object/public/logo_ecomoving/Logo_horizontal.png" alt="Ecomoving Logo" className="logo-img" />
         </div>
@@ -226,7 +226,7 @@ export default function Home() {
 
       <section className='hero-premium' style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
         <div style={{ position: 'absolute', inset: 0, zIndex: 0 }}>
-          <img src={content.hero.background_image} alt="Ecomoving" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          <img src="https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?q=80&w=2013&auto=format&fit=crop" alt="Ecomoving" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(circle, transparent 20%, #000 100%)' }} />
         </div>
         <div style={{ position: 'relative', zIndex: 2, textAlign: 'center', maxWidth: '1000px', padding: '0 20px' }}>
@@ -236,7 +236,7 @@ export default function Home() {
             transition={{ duration: 1 }}
             style={{ fontSize: '5rem', fontFamily: 'var(--font-heading)', lineHeight: 1, marginBottom: '20px' }}
           >
-            {content.hero.title1}
+            ECOMOVING: MERCHANDISING SUSTENTABLE Y DISEÑO PREMIUM
           </motion.h1>
           <motion.p
             initial={{ opacity: 0 }}
@@ -244,11 +244,11 @@ export default function Home() {
             transition={{ duration: 1, delay: 0.5 }}
             style={{ fontSize: '1.5rem', color: '#888', marginBottom: '40px', letterSpacing: '2px' }}
           >
-            {content.hero.paragraph1}
+            Elevamos tu marca con productos corporativos de alto impacto y conciencia ecológica.
           </motion.p>
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8 }}>
-            <Link href={content.hero.cta_link} className='cta-luxury' style={{ display: 'inline-block', padding: '15px 40px', background: '#00d4bd', color: '#000', fontWeight: 900, borderRadius: '50px', letterSpacing: '2px', textDecoration: 'none' }}>
-              {content.hero.cta_text}
+            <Link href="/catalogo" className='cta-luxury' style={{ display: 'inline-block', padding: '15px 40px', background: '#00d4bd', color: '#000', fontWeight: 900, borderRadius: '50px', letterSpacing: '2px', textDecoration: 'none' }}>
+              Ver Catálogo
             </Link>
           </motion.div>
         </div>
@@ -265,7 +265,7 @@ export default function Home() {
       </footer>
 
       <style jsx global>{`
-        .nav-master {
+        .nav-master-public {
           position: fixed; top: 0; width: 100%; z-index: 1000;
           display: flex; justify-content: space-between; align-items: center;
           padding: 20px 50px; background: rgba(0,0,0,0.8); backdrop-filter: blur(15px);
