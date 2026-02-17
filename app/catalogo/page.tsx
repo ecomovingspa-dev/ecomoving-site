@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
-import { ArrowLeft, Search, Filter, ShoppingBag } from 'lucide-react';
+import { Search, ShoppingBag } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 interface Product {
@@ -52,69 +52,34 @@ export default function CatalogoPage() {
     });
 
     return (
-        <main style={{ minHeight: '100vh', backgroundColor: '#050505', color: 'white', padding: '120px 20px' }}>
-            <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
-                {/* Header */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '80px' }}>
-                    <div>
-                        <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#00d4bd', textDecoration: 'none', marginBottom: '30px', fontWeight: 700, fontSize: '12px', letterSpacing: '2px' }}>
-                            <ArrowLeft size={16} /> VOLVER AL INICIO
-                        </Link>
-                        <motion.h1
-                            initial={{ opacity: 0, x: -20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            style={{ fontSize: '5rem', fontWeight: 900, lineHeight: 0.9, marginBottom: '10px' }}
-                        >
-                            CATÁLOGO <span style={{ color: '#00d4bd' }}>2026</span>
-                        </motion.h1>
-                        <p style={{ color: '#666', fontSize: '1.2rem', maxWidth: '600px' }}>
-                            Selección exclusiva de merchandising sustentable para marcas con propósito.
-                        </p>
-                    </div>
-
-                    {/* Buscador y Filtros */}
-                    <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-                        <div style={{ position: 'relative' }}>
-                            <Search size={18} style={{ position: 'absolute', left: '15px', top: '50%', transform: 'translateY(-50%)', color: '#444' }} />
-                            <input
-                                type="text"
-                                placeholder="Buscar productos..."
-                                value={search}
-                                onChange={(e) => setSearch(e.target.value)}
-                                style={{
-                                    backgroundColor: '#111',
-                                    border: '1px solid #222',
-                                    padding: '15px 15px 15px 45px',
-                                    borderRadius: '12px',
-                                    color: 'white',
-                                    width: '300px',
-                                    outline: 'none'
-                                }}
-                            />
-                        </div>
+        <main style={{ minHeight: '100vh', backgroundColor: '#050505', color: 'white' }}>
+            {/* Header Idéntico al Admin */}
+            <nav className='nav-master'>
+                <div className='logo-brand'>
+                    <img src="https://xgdmyjzyejjmwdqkufhp.supabase.co/storage/v1/object/public/logo_ecomoving/Logo_horizontal.png" alt="Ecomoving Logo" className="logo-img" />
+                </div>
+                <div className='header-right' style={{ display: 'flex', alignItems: 'center', gap: '30px' }}>
+                    <Link href="/" className='nav-item'>VOLVER A INICIO</Link>
+                    <div className='search-bar'>
+                        <Search size={16} color="#444" />
+                        <input
+                            type="text"
+                            placeholder="Buscar producto..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                        />
                     </div>
                 </div>
+            </nav>
 
-                {/* Filtros de Categoría */}
-                <div style={{ display: 'flex', gap: '10px', marginBottom: '60px', overflowX: 'auto', paddingBottom: '10px' }} className="custom-scroll">
+            <div style={{ padding: '140px 60px 60px' }}>
+                {/* Menú de Categorías Estilo Admin (Rectángulos con Borde) */}
+                <div style={{ display: 'flex', gap: '15px', marginBottom: '60px', overflowX: 'auto', paddingBottom: '10px' }} className="custom-scroll">
                     {categories.map(cat => (
                         <button
                             key={cat}
                             onClick={() => setCategory(cat)}
-                            style={{
-                                padding: '12px 25px',
-                                borderRadius: '50px',
-                                border: '1px solid',
-                                borderColor: category === cat ? '#00d4bd' : '#222',
-                                backgroundColor: category === cat ? 'rgba(0, 212, 189, 0.1)' : 'transparent',
-                                color: category === cat ? '#00d4bd' : '#666',
-                                fontWeight: 700,
-                                fontSize: '11px',
-                                letterSpacing: '2px',
-                                cursor: 'pointer',
-                                whiteSpace: 'nowrap',
-                                transition: 'all 0.3s'
-                            }}
+                            className={`category-btn ${category === cat ? 'active' : ''}`}
                         >
                             {cat}
                         </button>
@@ -133,8 +98,8 @@ export default function CatalogoPage() {
                                 <motion.div
                                     key={product.id}
                                     layout
-                                    initial={{ opacity: 0, y: 20 }}
-                                    animate={{ opacity: 1, y: 0 }}
+                                    initial={{ opacity: 0, scale: 0.95 }}
+                                    animate={{ opacity: 1, scale: 1 }}
                                     exit={{ opacity: 0, scale: 0.9 }}
                                     whileHover={{ y: -10 }}
                                     style={{
@@ -152,7 +117,7 @@ export default function CatalogoPage() {
                                             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                                         />
                                         {product.is_premium && (
-                                            <div style={{ position: 'absolute', top: '20px', right: '20px', backgroundColor: '#00d4bd', color: 'black', padding: '5px 15px', borderRadius: '50px', fontSize: '10px', fontWeight: 900, letterSpacing: '1px' }}>
+                                            <div style={{ position: 'absolute', top: '20px', right: '20px', backgroundColor: '#00d4bd', color: 'black', padding: '5px 15px', borderRadius: '5px', fontSize: '10px', fontWeight: 900, letterSpacing: '2px' }}>
                                                 PREMIUM
                                             </div>
                                         )}
@@ -161,14 +126,14 @@ export default function CatalogoPage() {
                                         <span style={{ color: '#00d4bd', fontSize: '10px', fontWeight: 900, letterSpacing: '2px', textTransform: 'uppercase' }}>
                                             {product.categoria}
                                         </span>
-                                        <h3 style={{ fontSize: '1.8rem', fontWeight: 800, marginTop: '10px', marginBottom: '15px' }}>
+                                        <h3 style={{ fontSize: '1.8rem', fontWeight: 800, marginTop: '10px', marginBottom: '15px', fontFamily: 'var(--font-heading)' }}>
                                             {product.nombre}
                                         </h3>
                                         <p style={{ color: '#666', fontSize: '0.9rem', lineHeight: 1.6, marginBottom: '25px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                                             {product.descripcion}
                                         </p>
-                                        <button style={{ width: '100%', padding: '15px', backgroundColor: 'transparent', border: '1px solid #222', color: 'white', borderRadius: '12px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', transition: 'all 0.3s' }}>
-                                            COTIZAR <ShoppingBag size={18} />
+                                        <button style={{ width: '100%', padding: '15px', backgroundColor: 'transparent', border: '1px solid #222', color: 'white', borderRadius: '4px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', transition: 'all 0.3s', fontSize: '11px', letterSpacing: '2px' }}>
+                                            COTIZAR <ShoppingBag size={16} />
                                         </button>
                                     </div>
                                 </motion.div>
@@ -181,6 +146,27 @@ export default function CatalogoPage() {
             <footer style={{ marginTop: '100px', padding: '60px 0', borderTop: '1px solid #111', textAlign: 'center' }}>
                 <p style={{ color: '#444', fontSize: '11px', letterSpacing: '4px' }}>ECOMOVING © 2026 | EXPERIENCIA DE MARCA SUSTENTABLE</p>
             </footer>
+
+            <style jsx>{`
+                .search-bar {
+                    background: #111;
+                    border: 1px solid #222;
+                    padding: 8px 15px;
+                    border-radius: 4px;
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    width: 300px;
+                }
+                .search-bar input {
+                    background: transparent;
+                    border: none;
+                    color: white;
+                    outline: none;
+                    font-size: 12px;
+                    width: 100%;
+                }
+            `}</style>
         </main>
     );
 }
