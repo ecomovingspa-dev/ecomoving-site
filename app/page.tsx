@@ -264,25 +264,6 @@ export default function Home() {
         <div style={{ fontSize: '0.7rem', color: '#333' }}>© 2026 TODOS LOS DERECHOS RESERVADOS</div>
       </footer>
 
-      <style jsx global>{`
-        .nav-master-public {
-          position: fixed; top: 0; width: 100%; z-index: 1000;
-          display: flex; justify-content: space-between; align-items: center;
-          padding: 20px 50px; background: rgba(0,0,0,0.8); backdrop-filter: blur(15px);
-          border-bottom: 1px solid rgba(255,255,255,0.05);
-        }
-        .logo-brand { font-family: var(--font-heading); letter-spacing: 6px; font-weight: 900; }
-        .logo-img { height: 30px; width: auto; }
-        .logo-img-footer { height: 50px; width: auto; }
-        .nav-btn {
-          background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
-          color: #aaa; padding: 8px 16px; border-radius: 4px; font-size: 11px;
-          cursor: pointer; display: flex; align-items: center; gap: 8px; transition: 0.3s;
-        }
-        .nav-btn:hover { color: #00d4bd; border-color: #00d4bd; }
-        .cta-luxury { transition: 0.3s; }
-        .cta-luxury:hover { transform: scale(1.05); box-shadow: 0 0 30px rgba(0,212,189,0.4); }
-      `}</style>
     </main>
   );
 }
