@@ -3,13 +3,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence, useScroll, useSpring } from 'framer-motion';
-import { useWebContent, DynamicSection, WebContent } from '../lib/useWebContent';
-import VisualGallery from '../components/VisualGallery';
+import { useWebContent } from '@/lib/useWebContent';
+import VisualGallery from '@/components/VisualGallery';
+import ProductCatalog from '@/components/ProductCatalog';
 
-const BentoBlock = ({ block, assets }: {
-  block: any,
-  assets: any
-}) => {
+const BentoBlock = ({ block }: { block: any }) => {
   const [currentIdx, setCurrentIdx] = useState(0);
   const images = block.gallery && block.gallery.length > 0 ? block.gallery : [block.image].filter(Boolean);
   const [spanW, spanH] = (block.span || '4x1').split('x').map((n: string) => parseInt(n) || 1);
@@ -34,6 +32,7 @@ const BentoBlock = ({ block, assets }: {
 
   return (
     <motion.div
+      layoutId={block.id}
       initial={{ opacity: 0, scale: 0.9 }}
       whileInView={{ opacity: 1, scale: 1 }}
       viewport={{ once: true }}
@@ -66,12 +65,13 @@ const BentoBlock = ({ block, assets }: {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
               transition={{ duration: 1.2, ease: "easeInOut" }}
-              src={assets[block.id] || images[currentIdx] || 'https://via.placeholder.com/800x600?text=Ecomoving'}
+              src={images[currentIdx] || 'https://via.placeholder.com/800x600?text=Ecomoving'}
               style={{
                 width: '100%', height: '100%', objectFit: 'cover',
                 opacity: block.type === 'both' ? 0.4 : 1,
                 zIndex: 1
               }}
+              alt={block.label}
             />
           </AnimatePresence>
         </div>
@@ -103,7 +103,7 @@ export default function Home() {
     restDelta: 0.001
   });
 
-  const { content, loading } = useWebContent();
+  const { content, loading: contentLoading } = useWebContent();
 
   const renderDynamicSection = (section: any) => {
     const sectionAccent = section.blocks?.find((b: any) => b.bgColor)?.bgColor || section.titleColor || '#00d4bd';
@@ -120,13 +120,14 @@ export default function Home() {
           >
             <h2 className='editorial-title' style={{
               fontSize: section.titleSize || '4.5rem',
+              fontFamily: 'var(--font-heading)',
               color: section.titleColor || 'white',
               marginBottom: '30px',
               lineHeight: 1.1,
               position: 'relative',
               display: 'inline-block'
             }}>
-              {section.title1 || (section as any).title}
+              {section.title1}
               <div style={{
                 position: 'absolute',
                 bottom: '-15px',
@@ -147,32 +148,8 @@ export default function Home() {
                 lineHeight: 1.8,
                 transition: 'all 0.5s ease'
               }}>
-                {section.paragraph1 || (section as any).description}
+                {section.paragraph1}
               </p>
-
-              {section.title2 && (
-                <h3 style={{
-                  gridColumn: '1 / span 24',
-                  fontSize: '1.5rem',
-                  color: section.titleColor || 'white',
-                  marginTop: '40px',
-                  marginBottom: '15px',
-                  opacity: 0.9
-                }}>
-                  {section.title2}
-                </h3>
-              )}
-              {section.paragraph2 && (
-                <p style={{
-                  gridColumn: '1 / span 24',
-                  maxWidth: '700px',
-                  fontSize: '1.1rem',
-                  color: section.descColor || '#666',
-                  lineHeight: 1.6
-                }}>
-                  {section.paragraph2}
-                </p>
-              )}
             </div>
           </motion.div>
 
@@ -186,7 +163,6 @@ export default function Home() {
               <BentoBlock
                 key={block.id}
                 block={block}
-                assets={{}}
               />
             ))}
           </div>
@@ -214,11 +190,8 @@ export default function Home() {
     ];
 
     return [...array].sort((a: any, b: any) => {
-      const titleA = (a.title1 || (a as any).title || '').toUpperCase();
-      const titleB = (b.title1 || (b as any).title || '').toUpperCase();
-
-      const indexA = categoryOrder.findIndex(cat => titleA.includes(cat));
-      const indexB = categoryOrder.findIndex(cat => titleB.includes(cat));
+      const indexA = categoryOrder.findIndex(cat => (a.title1 || a.title || '').toUpperCase().includes(cat));
+      const indexB = categoryOrder.findIndex(cat => (b.title1 || b.title || '').toUpperCase().includes(cat));
 
       if (indexA !== -1 && indexB !== -1) return indexA - indexB;
       if (indexA !== -1) return -1;
@@ -228,7 +201,11 @@ export default function Home() {
     });
   }, [content.sections]);
 
-  if (loading) return <div style={{ height: '100vh', background: '#000', color: '#00d4bd', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', letterSpacing: '15px', fontFamily: 'var(--font-heading)' }}>ECOMOVING SPA</div>;
+  if (contentLoading) return (
+    <div style={{ height: '100vh', background: '#000', color: '#00d4bd', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', letterSpacing: '15px', fontFamily: 'var(--font-heading)' }}>
+      ECOMOVING SPA
+    </div>
+  );
 
   return (
     <main style={{ backgroundColor: '#050505', color: 'white', minHeight: '100vh' }}>
@@ -244,11 +221,6 @@ export default function Home() {
       <nav className='nav-master'>
         <div className='logo-brand'>
           <img src="https://xgdmyjzyejjmwdqkufhp.supabase.co/storage/v1/object/public/logo_ecomoving/Logo_horizontal.png" alt="Ecomoving Logo" className="logo-img" />
-        </div>
-        <div className='nav-links' style={{ display: 'flex', gap: '30px' }}>
-          <Link href="/catalogo" className='nav-item'>CATÁLOGO</Link>
-          <Link href="/#nosotros" className='nav-item'>NOSOTROS</Link>
-          <Link href="/#contacto" className='nav-item'>CONTACTO</Link>
         </div>
       </nav>
 
@@ -284,13 +256,33 @@ export default function Home() {
 
       {sections.map(s => renderDynamicSection(s))}
 
-      <footer style={{ padding: '80px 0', textAlign: 'center', borderTop: '1px solid #111', background: '#000' }}>
+      <footer id="contacto" style={{ padding: '80px 0', textAlign: 'center', borderTop: '1px solid #111', background: '#000' }}>
         <div style={{ marginBottom: '20px' }}>
-          <img src="https://xgdmyjzyejjmwdqkufhp.supabase.co/storage/v1/object/public/logo_ecomoving/Logo_horizontal.png" alt="Ecomoving Logo" style={{ height: '50px' }} />
+          <img src="https://xgdmyjzyejjmwdqkufhp.supabase.co/storage/v1/object/public/logo_ecomoving/Logo_horizontal.png" alt="Ecomoving Logo" className="logo-img-footer" />
         </div>
         <div style={{ fontSize: '0.8rem', color: '#555', letterSpacing: '4px', marginBottom: '30px' }}>CHILE &bull; SUSTENTABILIDAD &bull; DISEÑO</div>
-        <div style={{ fontSize: '0.7rem', color: '#333' }}>© 2026 TODOS LOS DERECHOS RESERVADOS</div>
+        <div style={{ fontSize: '0.7rem', color: '#333' }}>© {new Date().getFullYear()} TODOS LOS DERECHOS RESERVADOS</div>
       </footer>
+
+      <style jsx global>{`
+        .nav-master {
+          position: fixed; top: 0; width: 100%; z-index: 1000;
+          display: flex; justify-content: space-between; align-items: center;
+          padding: 20px 50px; background: rgba(0,0,0,0.8); backdrop-filter: blur(15px);
+          border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .logo-brand { font-family: var(--font-heading); letter-spacing: 6px; font-weight: 900; }
+        .logo-img { height: 30px; width: auto; }
+        .logo-img-footer { height: 50px; width: auto; }
+        .nav-btn {
+          background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+          color: #aaa; padding: 8px 16px; border-radius: 4px; font-size: 11px;
+          cursor: pointer; display: flex; align-items: center; gap: 8px; transition: 0.3s;
+        }
+        .nav-btn:hover { color: #00d4bd; border-color: #00d4bd; }
+        .cta-luxury { transition: 0.3s; }
+        .cta-luxury:hover { transform: scale(1.05); box-shadow: 0 0 30px rgba(0,212,189,0.4); }
+      `}</style>
     </main>
   );
 }

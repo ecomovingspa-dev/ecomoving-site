@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Maximize2, X } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion';
+import { Maximize2, X, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface VisualGalleryProps {
     images?: string[];
@@ -11,16 +11,21 @@ interface VisualGalleryProps {
 
 export default function VisualGallery({ images, accentColor = '#00d4bd' }: VisualGalleryProps) {
     const [selectedImg, setSelectedImg] = useState<string | null>(null);
+    const scrollRef = useRef<HTMLDivElement>(null);
 
+    // Imágenes de muestra Premium si no hay cargadas
     const displayImages = images || [];
 
+    // Si no hay imágenes, no mostrar nada
     if (displayImages.length === 0) return null;
 
+    // Detectamos si es una galería pequeña para no usar efecto "Cinta" y evitar ver fotos repetidas
     const isSmallGallery = displayImages.length < 5;
     const infiniteImages = isSmallGallery ? displayImages : [...displayImages, ...displayImages];
 
     return (
         <div style={{ marginTop: '80px', position: 'relative', width: '100%', paddingBottom: '40px' }}>
+            {/* Header Estilo Editorial */}
             <div style={{ padding: '0 20px', marginBottom: '30px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
                 <div>
                     <h4 style={{
@@ -35,8 +40,14 @@ export default function VisualGallery({ images, accentColor = '#00d4bd' }: Visua
                     </h4>
                     <p style={{ color: `${accentColor}99`, fontSize: '11px', margin: '5px 0 0 0', fontWeight: 600, letterSpacing: '2px' }}>PORTFOLIO EN MOVIMIENTO</p>
                 </div>
+                {!isSmallGallery && (
+                    <div style={{ color: 'rgba(255,255,255,0.1)', fontSize: '3rem', fontWeight: 900, lineHeight: 0.8, fontFamily: 'var(--font-heading)' }}>
+                        ∞
+                    </div>
+                )}
             </div>
 
+            {/* CONTENEDOR DE IMÁGENES */}
             <div style={{
                 width: isSmallGallery ? '100%' : '100vw',
                 position: 'relative',
@@ -47,6 +58,14 @@ export default function VisualGallery({ images, accentColor = '#00d4bd' }: Visua
                 overflow: 'hidden',
                 padding: '20px 0'
             }}>
+                {!isSmallGallery && (
+                    <div style={{
+                        position: 'absolute', inset: 0, zIndex: 10,
+                        background: 'linear-gradient(to right, #050505 0%, transparent 15%, transparent 85%, #050505 100%)',
+                        pointerEvents: 'none'
+                    }} />
+                )}
+
                 <motion.div
                     style={{
                         display: 'flex',
@@ -60,7 +79,7 @@ export default function VisualGallery({ images, accentColor = '#00d4bd' }: Visua
                         x: {
                             repeat: Infinity,
                             repeatType: "loop",
-                            duration: displayImages.length * 8,
+                            duration: displayImages.length * 8, // Velocidad adaptativa
                             ease: "linear"
                         }
                     }}
@@ -83,6 +102,7 @@ export default function VisualGallery({ images, accentColor = '#00d4bd' }: Visua
                             }}
                             onClick={() => setSelectedImg(src)}
                         >
+                            {/* Overlay de info al hover */}
                             <motion.div
                                 initial={{ opacity: 0 }}
                                 whileHover={{ opacity: 1 }}
@@ -113,6 +133,7 @@ export default function VisualGallery({ images, accentColor = '#00d4bd' }: Visua
                 </motion.div>
             </div>
 
+            {/* LIGHTBOX PREMIUM */}
             <AnimatePresence>
                 {selectedImg && (
                     <motion.div
@@ -154,6 +175,10 @@ export default function VisualGallery({ images, accentColor = '#00d4bd' }: Visua
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            <style jsx>{`
+                .custom-scroll-hidden::-webkit-scrollbar { display: none; }
+            `}</style>
         </div>
     );
 }

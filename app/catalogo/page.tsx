@@ -1,108 +1,88 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState } from 'react';
+import ProductCatalog from '@/components/ProductCatalog';
+import CatalogLeadMagnet from '@/components/CatalogLeadMagnet';
 import Link from 'next/link';
-import { Search, Info, Settings, ChevronRight } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+import { Search } from 'lucide-react';
 
-interface Product {
-    id: string;
-    nombre: string;
-    categoria: string;
-    imagen_principal: string;
-}
-
-export default function CatalogoPage() {
-    const [products, setProducts] = useState<Product[]>([]);
-    const [loading, setLoading] = useState(true);
+export default function CatalogPage() {
     const [search, setSearch] = useState('');
 
-    useEffect(() => {
-        const fetchProducts = async () => {
-            setLoading(true);
-            try {
-                const { data, error } = await supabase
-                    .from('productos')
-                    .select('id, nombre, categoria, imagen_principal');
-                if (error) throw error;
-                setProducts(data || []);
-            } catch (err) {
-                console.error('Error:', err);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchProducts();
-    }, []);
-
-    const filtered = products.filter(p =>
-        p.nombre.toLowerCase().includes(search.toLowerCase()) ||
-        p.categoria.toLowerCase().includes(search.toLowerCase())
-    );
-
     return (
-        <main style={{ minHeight: '100vh', backgroundColor: '#050505' }}>
-            {/* Header - Mirror Image 1 */}
-            <nav className='nav-master'>
-                <div className='nav-left'>
-                    <img src="https://xgdmyjzyejjmwdqkufhp.supabase.co/storage/v1/object/public/logo_ecomoving/Logo_horizontal.png" alt="Ecomoving Logo" className='logo-img' />
-                </div>
+        <main style={{ backgroundColor: '#050505', minHeight: '100vh' }}>
+            {/* Header del Catálogo */}
+            <nav className="nav-premium">
+                <Link href="/" className="brand-logo">
+                    <img src="https://xgdmyjzyejjmwdqkufhp.supabase.co/storage/v1/object/public/logo_ecomoving/Logo_horizontal.png" alt="Ecomoving Logo" className="logo-img" />
+                </Link>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '25px' }}>
+                    <Link href="/" className="nav-item-link" style={{ color: '#888', textDecoration: 'none', fontSize: '10px', fontWeight: '900', letterSpacing: '2px', textTransform: 'uppercase' }}>Volver a Inicio</Link>
 
-                <div className='nav-right'>
-                    <Link href="/" className='nav-link'>VOLVER A INICIO</Link>
-                    <div className='search-box'>
-                        <Search size={14} color="#444" />
+                    <div style={{ position: 'relative', width: '250px' }}>
+                        <Search style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', width: '14px', height: '14px', color: 'rgba(255,255,255,0.4)' }} />
                         <input
                             type="text"
                             placeholder="Buscar producto..."
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
+                            style={{
+                                width: '100%',
+                                padding: '12px 12px 12px 40px',
+                                backgroundColor: 'rgba(255,255,255,0.05)',
+                                border: '1px solid rgba(255,255,255,0.1)',
+                                borderRadius: '4px',
+                                color: 'white',
+                                outline: 'none',
+                                fontSize: '12px',
+                                fontFamily: 'var(--font-body)'
+                            }}
                         />
                     </div>
-                    <Settings size={18} color="#444" style={{ cursor: 'pointer shadow' }} />
                 </div>
             </nav>
 
-            {/* Breadcrumb / Category Navigation - Mirror Image 1 */}
-            <div className='cat-nav'>
-                <button className='cat-btn-main'>
-                    CATEGORIAS <ChevronRight size={14} />
-                </button>
-                <Link href="#" className='cat-link'>PRODUCTOS ECO</Link>
-                <Link href="#" className='cat-link'>PRODUCTOS PREMIUM</Link>
+            <div style={{ paddingTop: '100px' }}>
+                <ProductCatalog adminMode={false} externalSearch={search} />
             </div>
 
-            {/* Product Gallery - Mirror Image 1 */}
-            {loading ? (
-                <div style={{ height: '400px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1 }} style={{ width: 30, height: 30, border: '2px solid #D4AF37', borderTopColor: 'transparent', borderRadius: '50%' }} />
+            <CatalogLeadMagnet />
+
+            <footer className="footer-minimal" style={{ padding: '80px 0', textAlign: 'center', borderTop: '1px solid #111', background: '#000' }}>
+                <div>
+                    <img src="https://xgdmyjzyejjmwdqkufhp.supabase.co/storage/v1/object/public/logo_ecomoving/Logo_horizontal.png" alt="Ecomoving Logo" style={{ height: '40px' }} />
+                    <p style={{ marginTop: '20px', color: '#444', fontSize: '0.7rem', letterSpacing: '4px', textTransform: 'uppercase' }}>
+                        Catálogo Exclusivo para Empresas<br />
+                        Ecomoving Premium
+                    </p>
                 </div>
-            ) : (
-                <div className='product-grid'>
-                    <AnimatePresence>
-                        {filtered.map((product) => (
-                            <motion.div
-                                key={product.id}
-                                layout
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                className="product-item"
-                            >
-                                <div className='image-wrapper'>
-                                    <img src={product.imagen_principal} alt={product.nombre} />
-                                    <div className='tag-overlay'>{product.categoria}</div>
-                                    <div className='info-overlay'>
-                                        <Info size={16} />
-                                    </div>
-                                </div>
-                                <h3 className='product-title'>{product.nombre}</h3>
-                            </motion.div>
-                        ))}
-                    </AnimatePresence>
+                <div style={{ marginTop: '40px', fontSize: '0.6rem', color: '#222', letterSpacing: '2px' }}>
+                    &copy; {new Date().getFullYear()} ECOMOVING SPA. TODOS LOS DERECHOS RESERVADOS.
                 </div>
-            )}
+            </footer>
+
+            <style jsx>{`
+                .nav-premium {
+                    position: fixed;
+                    top: 0;
+                    width: 100%;
+                    z-index: 1000;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    padding: 20px 50px;
+                    background: rgba(0,0,0,0.8);
+                    backdrop-filter: blur(20px);
+                    border-bottom: 1px solid rgba(255,255,255,0.05);
+                }
+                .logo-img {
+                    height: 25px;
+                    width: auto;
+                }
+                .nav-item-link:hover {
+                    color: var(--accent-turquoise) !important;
+                }
+            `}</style>
         </main>
     );
 }
