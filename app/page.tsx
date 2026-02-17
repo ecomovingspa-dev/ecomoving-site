@@ -24,7 +24,7 @@ const BentoBlock = ({ block }: { block: any }) => {
   useEffect(() => {
     if (images.length > 1) {
       const interval = setInterval(() => {
-        setCurrentIdx((prev) => (prev + 1) % images.length);
+        setCurrentIdx((prev: number) => (prev + 1) % images.length);
       }, 4000);
       return () => clearInterval(interval);
     }
@@ -159,7 +159,7 @@ export default function Home() {
             gap: '10px', position: 'relative', padding: '20px',
             minHeight: '620px', marginBottom: '80px'
           }}>
-            {(section.blocks || []).map((block: any) => (
+            {((section.blocks as any[]) || []).map((block: any) => (
               <BentoBlock
                 key={block.id}
                 block={block}
@@ -254,7 +254,7 @@ export default function Home() {
         </div>
       </section>
 
-      {sections.map(s => renderDynamicSection(s))}
+      {(sections as any[]).map((s: any) => renderDynamicSection(s))}
 
       <footer id="contacto" style={{ padding: '80px 0', textAlign: 'center', borderTop: '1px solid #111', background: '#000' }}>
         <div style={{ marginBottom: '20px' }}>

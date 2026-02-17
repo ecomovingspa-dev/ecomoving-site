@@ -151,6 +151,36 @@ p {
 }
 
 /* --- Header --- */
+
+.nav-master-public {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  padding: 30px 60px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+.nav-master-public .logo-brand {
+  pointer-events: auto;
+}
+
+/* ELIMINACIÓN FORZADA DE NAVEGACIÓN ANTIGUA */
+.nav-links,
+.nav-item,
+[class*="nav-item"],
+[class*="nav-links"],
+.nav-container a:not(.brand-logo) {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
 .nav-premium {
   position: fixed;
   top: 0;
