@@ -236,7 +236,7 @@ export default function Home() {
             transition={{ duration: 1 }}
             style={{ fontSize: '5rem', fontFamily: 'var(--font-heading)', lineHeight: 1, marginBottom: '20px' }}
           >
-            ECOMOVING: MERCHANDISING SUSTENTABLE Y DISEÑO PREMIUM
+            ECOMOVING | MERCHANDISING SUSTENTABLE Y DISEÑO PREMIUM
           </motion.h1>
           <motion.p
             initial={{ opacity: 0 }}

@@ -216,24 +216,6 @@ p {
   margin-bottom: 20px;
 }
 
-.nav-links {
-  display: flex;
-  gap: 30px;
-}
-
-.nav-item {
-  color: var(--text-muted);
-  text-decoration: none;
-  font-size: 0.8em;
-  text-transform: uppercase;
-  letter-spacing: 2px;
-  transition: color 0.3s;
-}
-
-.nav-item:hover {
-  color: var(--accent-gold);
-}
-
 /* --- Hero Section --- */
 .hero-wrapper {
   position: relative;
