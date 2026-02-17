@@ -1,263 +1,204 @@
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Montserrat:wght@300;400;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Montserrat:wght@300;400;500;600;700;800;900&display=swap');
 
 :root {
   --bg-color: #050505;
-  --text-main: #e0e0e0;
-  --text-muted: #888888;
   --accent-gold: #D4AF37;
   --accent-turquoise: #00d4bd;
   --font-heading: 'Cinzel', serif;
   --font-body: 'Montserrat', sans-serif;
-  --border-subtle: rgba(255, 255, 255, 0.05);
-}
-
-* {
-  box-sizing: border-box;
+  --header-bg: #000;
 }
 
 body {
   background-color: var(--bg-color);
-  color: var(--text-main);
+  color: white;
   font-family: var(--font-body);
   margin: 0;
-  padding: 0;
-  overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
 }
 
-/* Custom Scrollbar - Identical to Admin */
-.custom-scroll::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-.custom-scroll::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.2);
-}
-
-.custom-scroll::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-}
-
-.custom-scroll::-webkit-scrollbar-thumb:hover {
-  background: var(--accent-turquoise);
-}
-
-/* Typography */
-h1,
-h2,
-h3,
-h4 {
-  font-family: var(--font-heading);
-  font-weight: 400;
-  margin: 0;
-}
-
-/* Navigation - Identical to Admin Header */
+/* Header Mirror Image 1 */
 .nav-master {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 60px;
+  background: var(--header-bg);
   position: fixed;
   top: 0;
   width: 100%;
   z-index: 1000;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 15px 60px;
-  background: rgba(0, 0, 0, 0.9);
-  backdrop-filter: blur(40px);
-  border-bottom: 1px solid var(--border-subtle);
 }
 
-.logo-brand img {
-  height: 35px;
+.nav-left {
+  display: flex;
+  align-items: center;
+}
+
+.nav-right {
+  display: flex;
+  align-items: center;
+  gap: 30px;
+}
+
+.logo-img {
+  height: 30px;
   width: auto;
 }
 
-.nav-item {
-  color: #555;
+.nav-link {
+  color: #888;
   text-decoration: none;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
   letter-spacing: 2px;
   text-transform: uppercase;
-  transition: all 0.3s;
+  transition: color 0.3s;
 }
 
-.nav-item:hover {
-  color: var(--accent-turquoise);
-}
-
-/* Search Bar - Identical to Admin */
-.search-container {
-  flex: 1;
-  max-width: 600px;
-  position: relative;
-  margin-left: 40px;
-}
-
-.search-icon {
-  position: absolute;
-  left: 20px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #444;
-}
-
-.search-input {
-  width: 100%;
-  padding: 15px 25px 15px 55px;
-  background-color: rgba(255, 255, 255, 0.02);
-  border: 1px solid var(--border-subtle);
-  border-radius: 2px;
+.nav-link:hover {
   color: white;
-  font-size: 15px;
-  outline: none;
-  letter-spacing: 1px;
-  font-family: var(--font-body);
 }
 
-/* Sidebar Categories - Identical to Gallery Tab */
-.sidebar-title {
-  color: var(--accent-gold);
+.search-box {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 8px 15px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 180px;
+}
+
+.search-box input {
+  background: transparent;
+  border: none;
+  color: #555;
   font-size: 11px;
+  outline: none;
+  width: 100%;
+}
+
+/* Category Navigation Mirror Image 1 */
+.cat-nav {
+  display: flex;
+  gap: 40px;
+  padding: 120px 60px 40px;
+  align-items: center;
+}
+
+.cat-btn-main {
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 15px 30px;
+  font-size: 10px;
   font-weight: 900;
   letter-spacing: 3px;
   text-transform: uppercase;
-  margin-bottom: 30px;
-}
-
-.sidebar-btn {
-  width: 100%;
-  text-align: left;
-  padding: 15px 20px;
-  background: transparent;
-  border: 1px solid transparent;
-  color: #555;
-  border-radius: 4px;
-  text-transform: uppercase;
-  font-size: 11px;
-  font-weight: 800;
   cursor: pointer;
-  letter-spacing: 2px;
-  transition: all 0.3s;
+  background: transparent;
+  color: white;
+  display: flex;
+  align-items: center;
+  gap: 15px;
 }
 
-.sidebar-btn:hover {
-  color: var(--text-main);
-  background: rgba(255, 255, 255, 0.02);
+.cat-link {
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: #444;
+  text-decoration: none;
+  transition: color 0.3s;
 }
 
-.sidebar-btn.active {
-  background: rgba(0, 212, 189, 0.05);
-  border-color: var(--accent-turquoise);
-  color: var(--accent-turquoise);
+.cat-link:hover {
+  color: white;
 }
 
-/* Product Cards - Identical to Admin Structure */
-.product-card {
-  background-color: rgba(255, 255, 255, 0.01);
-  border: 1px solid var(--border-subtle);
-  border-radius: 4px;
-  overflow: hidden;
-  transition: all 0.3s;
+/* Grid Design Mirror Image 1 */
+.product-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 40px;
+  padding: 0 60px 60px;
+}
+
+.product-item {
   display: flex;
   flex-direction: column;
+  gap: 20px;
 }
 
-.product-card:hover {
-  transform: translateY(-5px);
-  border-color: var(--accent-turquoise);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
-}
-
-.image-container {
-  aspect-ratio: 1/1;
-  background-color: #000;
+.image-wrapper {
   position: relative;
+  aspect-ratio: 4/3;
   overflow: hidden;
-  border-bottom: 1px solid var(--border-subtle);
+  background: #111;
 }
 
-.product-image {
+.image-wrapper img {
   width: 100%;
   height: 100%;
-  object-fit: contain;
-  transition: transform 0.8s cubic-bezier(0.165, 0.84, 0.44, 1);
+  object-fit: cover;
+  transition: transform 0.6s cubic-bezier(0.165, 0.84, 0.44, 1);
 }
 
-.product-card:hover .product-image {
+.product-item:hover .image-wrapper img {
   transform: scale(1.05);
 }
 
-.premium-badge {
+/* Text Over Image Mirror Image 1 */
+.tag-overlay {
   position: absolute;
-  top: 15px;
-  right: 15px;
-  background-color: var(--accent-turquoise);
-  color: black;
-  padding: 4px 12px;
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: 2px;
-  border-radius: 2px;
-}
-
-.card-content {
-  padding: 25px;
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-}
-
-.category-label {
+  bottom: 20px;
+  left: 20px;
   color: var(--accent-gold);
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 900;
   letter-spacing: 3px;
   text-transform: uppercase;
-  margin-bottom: 10px;
+  z-index: 2;
 }
 
-.product-name {
-  font-size: 20px;
-  line-height: 1.2;
-  margin-bottom: 15px;
+.info-overlay {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
   color: white;
+  opacity: 0.6;
+  z-index: 2;
 }
 
-.product-desc {
-  font-size: 13px;
-  color: #666;
-  line-height: 1.6;
-  margin-bottom: 20px;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+.image-wrapper::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.4), transparent);
+  pointer-events: none;
 }
 
-.cta-button {
-  margin-top: auto;
-  width: 100%;
-  padding: 18px;
-  background-color: var(--accent-turquoise);
-  color: black;
-  border: none;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 900;
-  letter-spacing: 2px;
+/* Title Below Image Mirror Image 1 */
+.product-title {
+  font-family: var(--font-heading);
+  font-size: 16px;
+  color: white;
   text-transform: uppercase;
-  cursor: pointer;
-  transition: all 0.3s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
+  letter-spacing: 2px;
+  margin: 0;
+  font-weight: 400;
 }
 
-.cta-button:hover {
-  background-color: #00f0d5;
-  transform: scale(1.02);
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #222;
 }
