@@ -176,9 +176,6 @@ export default function VisualGallery({ images, accentColor = '#00d4bd' }: Visua
                 )}
             </AnimatePresence>
 
-            <style jsx>{`
-                .custom-scroll-hidden::-webkit-scrollbar { display: none; }
-            `}</style>
         </div>
     );
 }
