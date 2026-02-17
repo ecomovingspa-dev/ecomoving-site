@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
-import { Search, ShoppingBag } from 'lucide-react';
+import { Search, ShoppingBag, Loader2, ChevronRight } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 interface Product {
@@ -12,25 +12,29 @@ interface Product {
     categoria: string;
     descripcion: string;
     imagen_principal: string;
-    precio?: number;
+    imagenes_galeria?: string[];
+    features?: string[];
     is_premium?: boolean;
+    wholesaler?: string;
 }
 
 export default function CatalogoPage() {
     const [products, setProducts] = useState<Product[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
-    const [category, setCategory] = useState('TODAS');
+    const [activeCategory, setActiveCategory] = useState('TODAS');
+
+    const specialCategories = ['TODAS', 'ECOLÓGICOS', 'BOTELLAS, MUGS Y TAZAS', 'CUADERNOS, LIBRETAS Y MEMO SET', 'MOCHILAS, BOLSOS Y MORRALES', 'BOLÍGRAFOS', 'ACCESORIOS'];
 
     useEffect(() => {
         const fetchProducts = async () => {
             setLoading(true);
             try {
-                let query = supabase
+                // Obtenemos los productos reales tal cual están en Supabase
+                const { data, error } = await supabase
                     .from('productos')
-                    .select('id, nombre, categoria, descripcion, imagen_principal, is_premium');
+                    .select('*');
 
-                const { data, error } = await query;
                 if (error) throw error;
                 setProducts(data || []);
             } catch (err) {
@@ -42,131 +46,129 @@ export default function CatalogoPage() {
         fetchProducts();
     }, []);
 
-    const categories = ['TODAS', ...Array.from(new Set(products.map(p => p.categoria.toUpperCase())))];
-
     const filtered = products.filter(p => {
         const matchesSearch = p.nombre.toLowerCase().includes(search.toLowerCase()) ||
-            p.descripcion?.toLowerCase().includes(search.toLowerCase());
-        const matchesCategory = category === 'TODAS' || p.categoria.toUpperCase() === category;
+            (p.descripcion && p.descripcion.toLowerCase().includes(search.toLowerCase())) ||
+            (p.id && p.id.toLowerCase().includes(search.toLowerCase()));
+
+        const catUpper = p.categoria ? p.categoria.toUpperCase() : '';
+        const matchesCategory = activeCategory === 'TODAS' || catUpper.includes(activeCategory);
+
         return matchesSearch && matchesCategory;
     });
 
     return (
         <main style={{ minHeight: '100vh', backgroundColor: '#050505', color: 'white' }}>
-            {/* Header Idéntico al Admin */}
+            {/* Header Mirror Admin */}
             <nav className='nav-master'>
                 <div className='logo-brand'>
-                    <img src="https://xgdmyjzyejjmwdqkufhp.supabase.co/storage/v1/object/public/logo_ecomoving/Logo_horizontal.png" alt="Ecomoving Logo" className="logo-img" />
+                    <img src="https://xgdmyjzyejjmwdqkufhp.supabase.co/storage/v1/object/public/logo_ecomoving/Logo_horizontal.png" alt="Ecomoving Logo" />
                 </div>
-                <div className='header-right' style={{ display: 'flex', alignItems: 'center', gap: '30px' }}>
-                    <Link href="/" className='nav-item'>VOLVER A INICIO</Link>
-                    <div className='search-bar'>
-                        <Search size={16} color="#444" />
-                        <input
-                            type="text"
-                            placeholder="Buscar producto..."
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                        />
-                    </div>
+
+                <div className='search-container'>
+                    <Search className='search-icon' size={20} />
+                    <input
+                        className='search-input'
+                        type="text"
+                        placeholder="Buscar por nombre, SKU o categoría..."
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                    />
+                </div>
+
+                <div className='nav-actions' style={{ display: 'flex', gap: '30px', alignItems: 'center' }}>
+                    <Link href="/" className='nav-item'>INICIO</Link>
+                    <Link href="/#contacto" className='nav-item'>CONTACTO</Link>
                 </div>
             </nav>
 
-            <div style={{ padding: '140px 60px 60px' }}>
-                {/* Menú de Categorías Estilo Admin (Rectángulos con Borde) */}
-                <div style={{ display: 'flex', gap: '15px', marginBottom: '60px', overflowX: 'auto', paddingBottom: '10px' }} className="custom-scroll">
-                    {categories.map(cat => (
-                        <button
-                            key={cat}
-                            onClick={() => setCategory(cat)}
-                            className={`category-btn ${category === cat ? 'active' : ''}`}
-                        >
-                            {cat}
-                        </button>
-                    ))}
-                </div>
+            {/* Split Layout: Sidebar + Content */}
+            <div style={{ display: 'grid', gridTemplateColumns: '350px 1fr', height: '100vh', paddingTop: '80px', overflow: 'hidden' }}>
 
-                {/* Grid de Productos */}
-                {loading ? (
-                    <div style={{ height: '400px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1 }} style={{ width: 40, height: 40, border: '3px solid #00d4bd', borderTopColor: 'transparent', borderRadius: '50%' }} />
+                {/* Sidebar - Identical to Gallery Tab in EcomovingWeb */}
+                <aside className="custom-scroll" style={{ borderRight: '1px solid rgba(255,255,255,0.05)', padding: '40px 60px', overflowY: 'auto', backgroundColor: 'rgba(0,0,0,0.2)' }}>
+                    <h3 className='sidebar-title'>SECCIONES</h3>
+                    <div style={{ display: 'grid', gap: '10px' }}>
+                        {specialCategories.map(cat => (
+                            <button
+                                key={cat}
+                                onClick={() => setActiveCategory(cat)}
+                                className={`sidebar-btn ${activeCategory === cat ? 'active' : ''}`}
+                            >
+                                {cat}
+                                {activeCategory === cat && <ChevronRight size={14} style={{ marginLeft: 'auto' }} />}
+                            </button>
+                        ))}
                     </div>
-                ) : (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '40px' }}>
-                        <AnimatePresence>
-                            {filtered.map((product) => (
-                                <motion.div
-                                    key={product.id}
-                                    layout
-                                    initial={{ opacity: 0, scale: 0.95 }}
-                                    animate={{ opacity: 1, scale: 1 }}
-                                    exit={{ opacity: 0, scale: 0.9 }}
-                                    whileHover={{ y: -10 }}
-                                    style={{
-                                        backgroundColor: '#0a0a0a',
-                                        borderRadius: '24px',
-                                        border: '1px solid #151515',
-                                        overflow: 'hidden',
-                                        transition: 'all 0.3s'
-                                    }}
-                                >
-                                    <div style={{ aspectRatio: '1/1', backgroundColor: '#111', overflow: 'hidden', position: 'relative' }}>
-                                        <img
-                                            src={product.imagen_principal}
-                                            alt={product.nombre}
-                                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                        />
-                                        {product.is_premium && (
-                                            <div style={{ position: 'absolute', top: '20px', right: '20px', backgroundColor: '#00d4bd', color: 'black', padding: '5px 15px', borderRadius: '5px', fontSize: '10px', fontWeight: 900, letterSpacing: '2px' }}>
-                                                PREMIUM
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div style={{ padding: '30px' }}>
-                                        <span style={{ color: '#00d4bd', fontSize: '10px', fontWeight: 900, letterSpacing: '2px', textTransform: 'uppercase' }}>
-                                            {product.categoria}
-                                        </span>
-                                        <h3 style={{ fontSize: '1.8rem', fontWeight: 800, marginTop: '10px', marginBottom: '15px', fontFamily: 'var(--font-heading)' }}>
-                                            {product.nombre}
-                                        </h3>
-                                        <p style={{ color: '#666', fontSize: '0.9rem', lineHeight: 1.6, marginBottom: '25px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                                            {product.descripcion}
-                                        </p>
-                                        <button style={{ width: '100%', padding: '15px', backgroundColor: 'transparent', border: '1px solid #222', color: 'white', borderRadius: '4px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', transition: 'all 0.3s', fontSize: '11px', letterSpacing: '2px' }}>
-                                            COTIZAR <ShoppingBag size={16} />
-                                        </button>
-                                    </div>
-                                </motion.div>
-                            ))}
-                        </AnimatePresence>
-                    </div>
-                )}
+                </aside>
+
+                {/* Main Content Area */}
+                <section className="custom-scroll" style={{ padding: '60px', overflowY: 'auto' }}>
+                    {loading ? (
+                        <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <Loader2 className="animate-spin" color="var(--accent-turquoise)" size={40} />
+                        </div>
+                    ) : (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '40px' }}>
+                            <AnimatePresence>
+                                {filtered.map((product) => (
+                                    <motion.div
+                                        key={product.id}
+                                        layout
+                                        initial={{ opacity: 0, scale: 0.98 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        exit={{ opacity: 0, scale: 0.98 }}
+                                        className="product-card"
+                                    >
+                                        <div className='image-container'>
+                                            <img
+                                                src={product.imagen_principal}
+                                                alt={product.nombre}
+                                                className='product-image'
+                                            />
+                                            {product.is_premium && (
+                                                <div className='premium-badge'>PREMIUM</div>
+                                            )}
+                                        </div>
+
+                                        <div className="card-content">
+                                            <span className='category-label'>{product.categoria}</span>
+                                            <h3 className='product-name'>{product.nombre}</h3>
+
+                                            {/* Características Reales (Technical Specs) */}
+                                            {product.features && product.features.length > 0 && (
+                                                <div style={{ marginBottom: '20px' }}>
+                                                    <ul style={{ padding: 0, margin: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                                                        {product.features.slice(0, 3).map((feat, i) => (
+                                                            <li key={i} style={{ fontSize: '11px', color: '#888', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                <div style={{ width: '4px', height: '4px', background: 'var(--accent-gold)', borderRadius: '50%' }} />
+                                                                {feat}
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                            )}
+
+                                            <p className='product-desc'>{product.descripcion}</p>
+
+                                            <button className='cta-button'>
+                                                COTIZAR <ShoppingBag size={18} />
+                                            </button>
+                                        </div>
+                                    </motion.div>
+                                ))}
+                            </AnimatePresence>
+
+                            {filtered.length === 0 && (
+                                <div style={{ gridColumn: '1 / -1', padding: '100px', textAlign: 'center', opacity: 0.2 }}>
+                                    <ShoppingBag size={80} style={{ marginBottom: '20px' }} />
+                                    <p style={{ letterSpacing: '2px', textTransform: 'uppercase' }}>No se encontraron productos en esta sección.</p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </section>
             </div>
-
-            <footer style={{ marginTop: '100px', padding: '60px 0', borderTop: '1px solid #111', textAlign: 'center' }}>
-                <p style={{ color: '#444', fontSize: '11px', letterSpacing: '4px' }}>ECOMOVING © 2026 | EXPERIENCIA DE MARCA SUSTENTABLE</p>
-            </footer>
-
-            <style jsx>{`
-                .search-bar {
-                    background: #111;
-                    border: 1px solid #222;
-                    padding: 8px 15px;
-                    border-radius: 4px;
-                    display: flex;
-                    align-items: center;
-                    gap: 10px;
-                    width: 300px;
-                }
-                .search-bar input {
-                    background: transparent;
-                    border: none;
-                    color: white;
-                    outline: none;
-                    font-size: 12px;
-                    width: 100%;
-                }
-            `}</style>
         </main>
     );
 }
