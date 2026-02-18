@@ -932,19 +932,22 @@ export default function ProductCatalog({
                     pointer-events: none;
                 }
                 .thumbnails-scroll {
-                    display: flex;
-                    gap: 15px;
-                    padding: 15px 30px;
+                    display: grid;
+                    grid-template-columns: repeat(20, 1fr);
+                    gap: 8px;
+                    padding: 10px 20px;
                     background: rgba(15, 15, 15, 0.4);
                     backdrop-filter: blur(40px);
-                    border-radius: 100px;
+                    border-radius: 12px;
                     border: 1px solid rgba(255, 255, 255, 0.05);
                     pointer-events: auto;
                     box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+                    width: 100%;
+                    max-width: 600px;
                 }
                 .thumbnail-item {
-                    width: 40px;
-                    height: 40px;
+                    aspect-ratio: 1/1;
+                    width: 100%;
                     border-radius: 6px;
                     overflow: hidden;
                     cursor: pointer;
