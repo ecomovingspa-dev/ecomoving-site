@@ -473,6 +473,7 @@ export default function ProductCatalog({
                                 <div className="modal-image-stage">
                                     <div
                                         className="main-image-container"
+                                        style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden' }}
                                         onDragOver={(e) => {
                                             if (isEditing) e.preventDefault();
                                         }}
@@ -495,6 +496,7 @@ export default function ProductCatalog({
                                             src={activeImage || selectedProduct.image}
                                             alt={selectedProduct.name}
                                             className="modal-hero-image"
+                                            style={{ maxWidth: '90%', maxHeight: '70vh', objectFit: 'contain', filter: 'drop-shadow(0 20px 50px rgba(0,0,0,0.5))' }}
                                         />
                                         {isEditing && (
                                             <div className="image-edit-overlay">
@@ -503,8 +505,8 @@ export default function ProductCatalog({
                                         )}
 
                                         {/* Galería de Miniaturas como Overlay */}
-                                        <div className="modal-thumbnails-overlay">
-                                            <div className="thumbnails-scroll">
+                                        <div className="modal-thumbnails-overlay" style={{ position: 'absolute', bottom: '20px', left: '50%', transform: 'translateX(-50%)', zIndex: 20, width: '100%', maxWidth: '90%' }}>
+                                            <div className="thumbnails-scroll" style={{ display: 'flex', gap: '10px', overflowX: 'auto', padding: '10px', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(10px)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)' }}>
                                                 {(galleryImages.length > 0 ? galleryImages : [selectedProduct.image]).map((img, idx) => (
                                                     <motion.div
                                                         key={idx}
@@ -515,8 +517,9 @@ export default function ProductCatalog({
                                                             setActiveImage(img);
                                                         }}
                                                         className={`thumbnail-item ${(activeImage || selectedProduct.image) === img ? 'active' : ''}`}
+                                                        style={{ width: '60px', height: '60px', flexShrink: 0, borderRadius: '6px', overflow: 'hidden', border: (activeImage || selectedProduct.image) === img ? '2px solid white' : '1px solid rgba(255,255,255,0.2)', cursor: 'pointer' }}
                                                     >
-                                                        <img src={img} alt={`${selectedProduct.name} - Vista ${idx + 1}`} />
+                                                        <img src={img} alt={`${selectedProduct.name} - Vista ${idx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                                     </motion.div>
                                                 ))}
                                             </div>

@@ -188,12 +188,31 @@ export default function Home() {
             gap: '10px', position: 'relative', padding: '20px',
             minHeight: '620px', marginBottom: '80px'
           }}>
-            {((section.blocks as any[]) || []).map((block: any) => (
-              <BentoBlock
-                key={block.id}
-                block={block}
-              />
-            ))}
+            {(() => {
+              // Filtrar y ordenar bloques de texto para inyección automática de contenido SEO
+              const allBlocks = (section.blocks as any[]) || [];
+              const textBlocks = [...allBlocks]
+                .filter((b: any) => b.type === 'text')
+                .sort((a: any, b: any) => (a.row - b.row) || (a.col - b.col));
+
+              return allBlocks.map((block: any) => {
+                let injectedContent = block.textContent;
+                let injectedSubText = block.subText;
+
+                // Inyectar Título 2 y Descripción 2 en el PRIMER bloque de texto encontrado
+                if (textBlocks[0]?.id === block.id) {
+                  if (section.title2) injectedContent = section.title2;
+                  if (section.paragraph2) injectedSubText = section.paragraph2;
+                }
+
+                return (
+                  <BentoBlock
+                    key={block.id}
+                    block={{ ...block, textContent: injectedContent, subText: injectedSubText }}
+                  />
+                );
+              });
+            })()}
           </div>
 
           <VisualGallery
