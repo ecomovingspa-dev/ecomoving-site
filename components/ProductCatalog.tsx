@@ -55,9 +55,9 @@ export default function ProductCatalog({
                     .order('found_at', { ascending: false });
 
                 if (bufferError || !bufferData || bufferData.length === 0) {
-                    // Fallback 2: catalog.json
-                    const catalogData = await import('../data/catalog.json');
-                    setProducts(catalogData.default);
+                    // Fallback 2: Empty array if no data source is available
+                    console.error('No products found in Supabase or buffer. Skipping static fallback.');
+                    setProducts([]);
                     return;
                 }
 
@@ -112,14 +112,13 @@ export default function ProductCatalog({
                     }));
                     setProducts(formatted);
                 } else {
-                    const catalogData = await import('../data/catalog.json');
-                    setProducts(catalogData.default);
+                    console.warn('No products found in buffer. Skipping static fallback.');
+                    setProducts([]);
                 }
             }
         } catch (error) {
             console.error('Error fetching products:', error);
-            const catalogData = await import('../data/catalog.json');
-            setProducts(catalogData.default);
+            setProducts([]);
         }
     };
 
