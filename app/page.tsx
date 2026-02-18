@@ -177,28 +177,9 @@ export default function Home() {
   };
 
   const sections = useMemo(() => {
-    const raw = content.sections;
-    const array = Array.isArray(raw) ? raw : (typeof raw === 'object' ? Object.values(raw) : []);
-
-    const categoryOrder = [
-      'ECOLOGICOS',
-      'BOTELLAS, MUG Y TAZAS',
-      'CUADERNOS, LIBRETAS Y MEMO SET',
-      'MOCHILAS, BOLSOS Y MORRALES',
-      'BOLÍGRAFOS',
-      'ACCESORIOS'
-    ];
-
-    return [...array].sort((a: any, b: any) => {
-      const indexA = categoryOrder.findIndex(cat => (a.title1 || a.title || '').toUpperCase().includes(cat));
-      const indexB = categoryOrder.findIndex(cat => (b.title1 || b.title || '').toUpperCase().includes(cat));
-
-      if (indexA !== -1 && indexB !== -1) return indexA - indexB;
-      if (indexA !== -1) return -1;
-      if (indexB !== -1) return 1;
-
-      return (a.order || 0) - (b.order || 0);
-    });
+    const array = content.sections || [];
+    // Respetamos estrictamente el campo 'order' del CMS o el índice natural del array
+    return [...array].sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
   }, [content.sections]);
 
   if (contentLoading) return (
