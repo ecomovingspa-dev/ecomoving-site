@@ -88,7 +88,20 @@ const BentoBlock = ({ block }: { block: any }) => {
           transform: block.writingMode && block.writingMode !== 'horizontal-tb' ? 'rotate(180deg)' : 'none',
           padding: '20px'
         }}>
-          {block.textContent}
+          {block.textContent && <h3 style={{ margin: 0, lineHeight: 1.2, textTransform: 'uppercase' }}>{block.textContent}</h3>}
+          {block.subText && (
+            <p style={{
+              margin: '15px 0 0 0',
+              fontWeight: 400,
+              fontSize: '0.9rem',
+              opacity: 0.9,
+              fontFamily: 'var(--font-body)',
+              textShadow: 'none',
+              lineHeight: 1.6
+            }}>
+              {block.subText}
+            </p>
+          )}
         </div>
       )}
     </motion.div>
