@@ -496,7 +496,15 @@ export default function ProductCatalog({
                                             src={activeImage || selectedProduct.image}
                                             alt={selectedProduct.name}
                                             className="modal-hero-image"
-                                            style={{ maxWidth: '90%', maxHeight: '70vh', objectFit: 'contain', filter: 'drop-shadow(0 20px 50px rgba(0,0,0,0.5))' }}
+                                            style={{
+                                                maxWidth: '100%',
+                                                maxHeight: '500px', // Límite de altura fijo en píxeles para evitar que crezca demasiado
+                                                width: 'auto',
+                                                height: 'auto',
+                                                objectFit: 'contain',
+                                                filter: 'drop-shadow(0 20px 40px rgba(0,0,0,0.6))',
+                                                margin: '0 auto'
+                                            }}
                                         />
                                         {isEditing && (
                                             <div className="image-edit-overlay">
@@ -909,10 +917,11 @@ export default function ProductCatalog({
                     overflow: hidden;
                 }
                 .modal-hero-image {
-                    max-width: 50%;
-                    max-height: 50%;
+                    max-width: 80%;
+                    max-height: 50vh;
                     object-fit: contain;
                     filter: drop-shadow(0 40px 100px rgba(0,0,0,0.9));
+                    z-index: 10;
                 }
                 .image-edit-overlay {
                     position: absolute;
