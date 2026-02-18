@@ -138,23 +138,13 @@ export default function ProductCatalog({
             return matchesPremium && matchesSearch;
         }
 
-        // Mapeo inteligente para retrocompatibilidad
-        const categoryMap: Record<string, string[]> = {
-            'ECOLOGICOS': ['ECOLOGICOS', 'ECO', 'MADERA', 'CORCHO'],
-            'BOTELLAS, MUG Y TAZAS': ['BOTELLAS', 'MUG', 'TAZAS', 'BOTELLA', 'TAZA', 'VASO', 'TERMO'],
-            'CUADERNOS, LIBRETAS Y MEMO SET': ['CUADERNOS', 'LIBRETAS', 'MEMO', 'LIBRETA', 'CUADERNO', 'NOTAS'],
-            'MOCHILAS, BOLSOS Y MORRALES': ['MOCHILAS', 'BOLSOS', 'MORRALES', 'MOCHILA', 'BOLSO', 'MORRAL', 'MALETIN', 'CARPETA'],
-            'BOLÍGRAFOS': ['BOLÍGRAFOS', 'BOLIGRAFO', 'LAPIZ', 'BOLIGRAFOS'],
-            'ACCESORIOS': ['ACCESORIOS', 'RELOJ', 'TECNOLOGIA', 'LLAVERO', 'HERRAMIENTAS']
-        };
-
-        const alias = categoryMap[fCat] || [fCat];
-        const matchesCategory = alias.some(a => pCat.includes(a));
+        // Lógica de Doble Categoría: divide por comas y verifica si el filtro coincide con alguna
+        const categories = pCat.split(',').map((c: string) => c.trim());
+        const matchesCategory = categories.some((cat: string) => cat.includes(fCat) || fCat.includes(cat));
 
         const matchesSearch = !externalSearch ||
             p.name.toLowerCase().includes(externalSearch.toLowerCase()) ||
-            p.description.toLowerCase().includes(externalSearch.toLowerCase()) ||
-            (p.id && p.id.toLowerCase().includes(externalSearch.toLowerCase()));
+            p.description.toLowerCase().includes(externalSearch.toLowerCase());
 
         return matchesCategory && matchesSearch;
     });
