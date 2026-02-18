@@ -104,6 +104,22 @@ export default function Home() {
   });
 
   const { content, loading: contentLoading } = useWebContent();
+  const [heroIdx, setHeroIdx] = useState(0);
+
+  const heroImages = useMemo(() => {
+    const h = content.hero;
+    const imgs = [h.background_image, h.background_image_2, h.background_image_3, ...(h.gallery || [])].filter(Boolean);
+    return imgs.length > 0 ? imgs : ['https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?q=80&w=2013&auto=format&fit=crop'];
+  }, [content.hero]);
+
+  useEffect(() => {
+    if (heroImages.length > 1) {
+      const itv = setInterval(() => {
+        setHeroIdx(prev => (prev + 1) % heroImages.length);
+      }, 6000);
+      return () => clearInterval(itv);
+    }
+  }, [heroImages.length]);
 
   const renderDynamicSection = (section: any) => {
     const sectionAccent = section.blocks?.find((b: any) => b.bgColor)?.bgColor || section.titleColor || '#00d4bd';
@@ -205,31 +221,60 @@ export default function Home() {
         </div>
       </nav>
 
+      {/* Hero Section Dinámico */}
       <section className='hero-premium' style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
         <div style={{ position: 'absolute', inset: 0, zIndex: 0 }}>
-          <img src="https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?q=80&w=2013&auto=format&fit=crop" alt="Ecomoving" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          <AnimatePresence mode='wait'>
+            <motion.img
+              key={heroImages[heroIdx]}
+              src={heroImages[heroIdx]}
+              alt="Ecomoving Hero"
+              initial={{ opacity: 0, scale: 1.1 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 2 }}
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            />
+          </AnimatePresence>
           <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(circle, transparent 20%, #000 100%)' }} />
         </div>
+
         <div style={{ position: 'relative', zIndex: 2, textAlign: 'center', maxWidth: '1000px', padding: '0 20px' }}>
           <motion.h1
+            key={content.hero.title1}
             initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 1 }}
-            style={{ fontSize: '5rem', fontFamily: 'var(--font-heading)', lineHeight: 1, marginBottom: '20px' }}
+            style={{ fontSize: 'min(5rem, 10vw)', fontFamily: 'var(--font-heading)', lineHeight: 1.1, marginBottom: '20px', textTransform: 'uppercase' }}
           >
-            ECOMOVING | MERCHANDISING SUSTENTABLE Y DISEÑO PREMIUM
+            {content.hero.title1}
           </motion.h1>
           <motion.p
+            key={content.hero.paragraph1}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 1, delay: 0.5 }}
-            style={{ fontSize: '1.5rem', color: '#888', marginBottom: '40px', letterSpacing: '2px' }}
+            style={{ fontSize: '1.5rem', color: '#888', marginBottom: '40px', letterSpacing: '2px', maxWidth: '800px', marginInline: 'auto' }}
           >
-            Elevamos tu marca con productos corporativos de alto impacto y conciencia ecológica.
+            {content.hero.paragraph1}
           </motion.p>
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8 }}>
-            <Link href="/catalogo" className='cta-luxury' style={{ display: 'inline-block', padding: '15px 40px', background: '#00d4bd', color: '#000', fontWeight: 900, borderRadius: '50px', letterSpacing: '2px', textDecoration: 'none' }}>
-              Ver Catálogo
+            <Link
+              href={content.hero.cta_link || '/catalogo'}
+              className='cta-luxury'
+              style={{
+                display: 'inline-block',
+                padding: '18px 50px',
+                background: '#00d4bd',
+                color: '#000',
+                fontWeight: 900,
+                borderRadius: '50px',
+                letterSpacing: '2px',
+                textDecoration: 'none',
+                transition: '0.3s'
+              }}
+            >
+              {content.hero.cta_text || 'VER CATÁLOGO'}
             </Link>
           </motion.div>
         </div>
