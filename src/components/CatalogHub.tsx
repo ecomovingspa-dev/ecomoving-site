@@ -2,19 +2,20 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Search, Trash2, Layers, Loader2, Save, Image as ImageIcon, Check, Star, RefreshCw, Plus, Sparkles, Send, Globe, RotateCw, FlipHorizontal, Maximize2, Minimize2, Square, RectangleHorizontal, RectangleVertical, ChevronRight } from 'lucide-react';
+import { X, Search, Trash2, Download, Layers, Loader2, Save, Image as ImageIcon, Check, Star, RefreshCw, Plus, Sparkles, Send, Globe, RotateCw, FlipHorizontal, Maximize2, Minimize2, Square, RectangleHorizontal, RectangleVertical, ChevronRight, Cloud, FolderOpen } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { generateMarketingAI, generateWebAI, generateSEOFilenameAI, MarketingContent, WebSectionContent, getMarketingHTMLTemplate } from '@/lib/gemini';
 import { useWebContent } from '@/hooks/useWebContent';
+import { fetchDriveItems, DriveItem } from '@/services/driveService';
 
 interface PendingProduct {
     id: string;
     wholesaler: string;
-    external_id: string;
-    name: string;
-    original_description: string;
+    sku_externo: string; // Alineado con DB
+    nombre: string;       // Alineado con DB
+    descripcion: string;  // Alineado con DB
     images: string[];
-    technical_specs: any;
+    technical_specs: any; // Mapeado a 'features' en DB
     found_at: string;
     status: string;
     category?: string;
@@ -31,7 +32,6 @@ interface CatalogHubProps {
 }
 
 export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
-    const [selectedWholesaler, setSelectedWholesaler] = useState('Todos');
     const [pendingProducts, setPendingProducts] = useState<PendingProduct[]>([]);
     const [selectedProduct, setSelectedProduct] = useState<PendingProduct | null>(null);
 
@@ -42,18 +42,10 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
     const [newCategoryName, setNewCategoryName] = useState('');
     const [isAddingNew, setIsAddingNew] = useState(false);
     const [newProductForm, setNewProductForm] = useState<Partial<PendingProduct>>({
-        name: '',
-        original_description: '',
+        nombre: '',
+        descripcion: '',
         images: [],
-        wholesaler: 'ZECAT', // Default
-        category: 'BOTELLA, MUG Y TAZA',
-        external_id: '',
-        is_premium: false,
-        seo_title: '',
-        seo_keywords: '',
-        seo_description: '',
-        for_marketing: false,
-        technical_specs: [] // Usaremos esto para las caracterÍsticas
+        technical_specs: []
     });
 
     const handleAddCategory = () => {
@@ -67,57 +59,130 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
     };
     const [activeManualImage, setActiveManualImage] = useState<string | null>(null); // Para nuevo producto
     const [catalogViewerImage, setCatalogViewerImage] = useState<string | null>(null); // LOCAL: Used strictly for viewing in Catalog tab
+    const [updatedProductIds, setUpdatedProductIds] = useState<Set<string>>(new Set());
+    const [insumoProductSearch, setInsumoProductSearch] = useState('');
+    const [insumoSearchResults, setInsumoSearchResults] = useState<PendingProduct[]>([]);
     const [activeImage, setActiveImage] = useState<string | null>(null); // GLOBAL: Used for Hero/Marketing tabs preview
     const [pendingFiles, setPendingFiles] = useState<Record<string, File>>({});
     const [isSaving, setIsSaving] = useState(false);
-    const [activeTab, setActiveTab] = useState<'insumo' | 'catalog' | 'gallery' | 'hero' | 'marketing'>('catalog');
-
-    // Estados para Laboratorio de Insumos
+    const [isGeneratingSEO, setIsGeneratingSEO] = useState(false);
+    const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
+    const [activeTab, setActiveTab] = useState<'insumo' | 'catalog' | 'gallery' | 'hero' | 'marketing'>('insumo');
+    const [marketingAiContext, setMarketingAiContext] = useState('');
     const [insumoFile, setInsumoFile] = useState<File | null>(null);
-    const [insumoMetadata, setInsumoMetadata] = useState<{
-        originalSize: number;
-        originalWidth: number;
-        originalHeight: number;
-        optimizedSize: number;
-        optimizedWidth: number;
-        optimizedHeight: number;
-        optimizedUrl: string | null;
-        optimizedBlob: Blob | null;
-    } | null>(null);
-    const [insumoTarget, setInsumoTarget] = useState<'web' | 'email'>('web');
-    const [isProcessingInsumo, setIsProcessingInsumo] = useState(false);
+    const [insumoFiles, setInsumoFiles] = useState<File[]>([]);
+    const [insumoPreview, setInsumoPreview] = useState<string | null>(null);
+    const [insumoPreviews, setInsumoPreviews] = useState<string[]>([]);
+    const [insumoOptimizedBlob, setInsumoOptimizedBlob] = useState<Blob | null>(null);
+    const [insumoOptimizedBlobs, setInsumoOptimizedBlobs] = useState<Blob[]>([]);
+    const [insumoSavingPercentage, setInsumoSavingPercentage] = useState<number>(0);
+    const [insumoDestination, setInsumoDestination] = useState<'catalog' | 'gallery' | 'hero' | 'marketing'>('catalog');
+    const [insumoCatalogAction, setInsumoCatalogAction] = useState<'new' | 'update'>('new');
+    const [insumoUpdateMode, setInsumoUpdateMode] = useState<'append' | 'replace'>('append');
     const [insumoTransform, setInsumoTransform] = useState({
         zoom: 1,
         rotation: 0,
         flipX: false,
-        aspectRatio: 'original' as 'original' | '1:1' | '16:9' | '9:16',
+        aspectRatio: 'original' as any,
         offsetX: 0,
         offsetY: 0
     });
-    const [isDraggingInsumo, setIsDraggingInsumo] = useState(false);
-    const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-    const [insumoAISEOFilename, setInsumoAISEOFilename] = useState<string | null>(null);
+    const [isRoutingInsumo, setIsRoutingInsumo] = useState(false);
+    const [insumoSource, setInsumoSource] = useState<'local' | 'drive'>('local');
+    const [driveSource, setDriveSource] = useState<'google' | 'local'>('google');
+    const [driveFolderId, setDriveFolderId] = useState('1Cf7jz-1Ufhewjxib2dKw_9PsOhWNSzp4');
+    const [driveItems, setDriveItems] = useState<DriveItem[]>([]);
+    const [driveNavigationStack, setDriveNavigationStack] = useState<string[]>([]);
+    const [isFetchingDrive, setIsFetchingDrive] = useState(false);
 
-    // Estados para GestiÍn de GALERÍAS
-    const [selectedGallerySection, setSelectedGallerySection] = useState<string>('ECOLÓGICOS');
+    // Estados para Gestión de GRILLA
+    const [selectedGallerySection, setSelectedGallerySection] = useState<string>('');
     const [galleryImages, setGalleryImages] = useState<string[]>([]);
     const [uploadingGallery, setUploadingGallery] = useState(false);
+    const [smartMatches, setSmartMatches] = useState<any[]>([]);
+    const [isSearchingMatches, setIsSearchingMatches] = useState(false);
 
-
+    // Biblioteca de Marketing para REUSO en HERO
+    const [marketingLibraryImages, setMarketingLibraryImages] = useState<string[]>([]);
+    const [marketingLibraryLoading, setMarketingLibraryLoading] = useState(false);
 
     // AI CONTENT FACTORY STATE
     const [isGeneratingAI, setIsGeneratingAI] = useState(false);
     const [generatedMarketing, setGeneratedMarketing] = useState<MarketingContent | null>(null);
     const [generatedWeb, setGeneratedWeb] = useState<WebSectionContent | null>(null);
     const [aiStatus, setAiStatus] = useState('');
+
+    const { content, updateSection } = useWebContent(); // Using sections from here
+
+    // Ensure we select a valid section on load
+    useEffect(() => {
+        if (content && content.sections && content.sections.length > 0) {
+            // If nothing selected or selection invalid, pick first
+            const isValid = selectedGallerySection && content.sections.some((s: any) => s.id === selectedGallerySection || s.title1 === selectedGallerySection);
+
+            if (!isValid) {
+                const first = content.sections[0];
+                setSelectedGallerySection(first.id || first.title1);
+            }
+        } else if (!selectedGallerySection && customCategories.length > 0) {
+            setSelectedGallerySection(customCategories[0]);
+        }
+    }, [content.sections, selectedGallerySection]);
+
+    // Persistencia de Folder ID de Drive y Carga Automática
+    useEffect(() => {
+        const savedFolderId = localStorage.getItem('ecomoving_drive_folder_id');
+        if (savedFolderId) {
+            setDriveFolderId(savedFolderId);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (driveFolderId) {
+            localStorage.setItem('ecomoving_drive_folder_id', driveFolderId);
+        }
+    }, [driveFolderId]);
+
+    useEffect(() => {
+        if (!selectedProduct) {
+            setSmartMatches([]);
+            return;
+        }
+
+        const sku = selectedProduct.sku_externo?.trim();
+        if (!sku || sku.length < 2) {
+            setSmartMatches([]);
+            return;
+        }
+
+        const findMatches = async () => {
+            setIsSearchingMatches(true);
+            try {
+                const resp = await fetch(`/api/local-folder?search=${encodeURIComponent(sku)}`);
+                const data = await resp.json();
+                setSmartMatches(data.items || []);
+            } catch (err) {
+                console.error('Error in smart match:', err);
+                setSmartMatches([]);
+            } finally {
+                setIsSearchingMatches(false);
+            }
+        };
+
+        const timer = setTimeout(findMatches, 300);
+        return () => clearTimeout(timer);
+    }, [selectedProduct?.id, selectedProduct?.sku_externo]);
+
+
+    // Actualizar estados locales de categorías para filtrado
     const [selectedCategory, setSelectedCategory] = useState<string>('TODAS');
     const [isExpandingCategories, setIsExpandingCategories] = useState(false);
     const specialCategories = ['ECOLÓGICOS', 'BOTELLAS, MUGS Y TAZAS', 'CUADERNOS, LIBRETAS Y MEMO SET', 'MOCHILAS, BOLSOS Y MORRALES', 'BOLÍGRAFOS', 'ACCESORIOS'];
-    const { content, updateSection } = useWebContent();
 
 
 
-    const wholesalers = ['Todos', 'CATÁLOGO'];
+
+    const wholesalers = ['CATÁLOGO'];
 
     const slugifyForSEO = (text: string) => {
         if (!text) return "";
@@ -130,143 +195,431 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
     };
 
     const mapProductFromDB = (item: any): PendingProduct => {
-        // Si el item viene de la tabla 'productos' (nueva estructura)
-        if (item.nombre && item.imagen_principal) {
-            return {
-                id: item.id,
-                wholesaler: item.wholesaler || 'Ecomoving',
-                external_id: item.id, // Para productos en vivo usamos el ID como externo
-                name: item.nombre,
-                original_description: item.descripcion || '',
-                images: Array.isArray(item.imagenes_galeria) ? item.imagenes_galeria : [item.imagen_principal],
-                category: item.categoria || 'Otros',
-                is_premium: item.is_premium || false,
-                technical_specs: Array.isArray(item.features) ? item.features : [],
-                found_at: item.created_at || new Date().toISOString(),
-                status: 'approved'
-            };
-        }
-
-        // Si el item viene de 'agent_buffer' (estructura original)
-        let specs: string[] = [];
-        const ts = item.technical_specs;
-
-        if (ts) {
-            if (Array.isArray(ts)) {
-                specs = ts;
-            } else if (typeof ts === 'object') {
-                if (Array.isArray(ts.specs)) {
-                    specs = ts.specs;
-                } else {
-                    specs = Object.entries(ts)
-                        .filter(([k]) => k !== 'category')
-                        .map(([k, v]) => `${k}: ${v}`);
-                }
-            } else if (typeof ts === 'string') {
-                specs = ts.split('\n').filter(l => l.trim());
-            }
-        }
+        const images = Array.isArray(item.imagenes_galeria) ? item.imagenes_galeria : (Array.isArray(item.images) ? item.images : [item.imagen_principal || item.image]);
+        const validImages = images.filter(Boolean);
 
         return {
-            ...item,
-            category: ts?.category || item.category || 'Otros',
-            is_premium: ts?.is_premium || false,
-            seo_title: ts?.seo_title || '',
-            seo_keywords: ts?.seo_keywords || '',
-            seo_description: ts?.seo_description || '',
-            for_marketing: ts?.for_marketing || false,
-            technical_specs: specs.length > 0 ? specs : (item.description ? [item.description] : [])
+            id: item.id,
+            wholesaler: item.wholesaler || 'Ecomoving',
+            sku_externo: item.sku_externo || item.external_id || item.id_externo || '',
+            nombre: item.nombre || item.name || '',
+            descripcion: item.descripcion || item.original_description || '',
+            images: validImages,
+            category: item.categoria || item.category || 'Otros',
+            is_premium: item.is_premium || false,
+            technical_specs: Array.isArray(item.features) ? item.features : [],
+            found_at: item.created_at || item.found_at || new Date().toISOString(),
+            status: item.status || 'approved',
+            seo_title: item.seo_title || '',
+            seo_keywords: item.seo_keywords || '',
+            seo_description: item.seo_description || '',
+            for_marketing: item.for_marketing || false
         };
     };
 
-    // Cargar productos del buffer
+    // Búsqueda de productos dentro de Insumos para Actualización
     useEffect(() => {
-        if (isOpen) {
-            fetchBuffer();
+        if (!insumoProductSearch.trim()) {
+            setInsumoSearchResults([]);
+            return;
         }
-    }, [isOpen, selectedWholesaler]); // Recargar cuando cambie el mayorista
+        const lowerSearch = insumoProductSearch.toLowerCase();
+        const results = pendingProducts.filter(p =>
+            p.nombre.toLowerCase().includes(lowerSearch) ||
+            p.sku_externo.toLowerCase().includes(lowerSearch)
+        ).slice(0, 5);
+        setInsumoSearchResults(results);
+    }, [insumoProductSearch, pendingProducts]);
 
-    const fetchBuffer = async () => {
+    const fetchPendingProducts = async () => {
         setLoading(true);
         try {
-            let data: any[] | null = [];
-            let error: any = null;
-
-            if (selectedWholesaler === 'CATÁLOGO') {
-                // Fetch from the new live catalog table
-                const { data: liveData, error: liveError } = await supabase
-                    .from('productos')
-                    .select('*')
-                    .order('created_at', { ascending: false });
-                data = liveData;
-                error = liveError;
-            } else {
-                // Si el mayorista es especÍfico o Todos, mostrar pendientes
-                const query = supabase
-                    .from('agent_buffer')
-                    .select('*')
-                    .eq('status', 'pending')
-                    .order('found_at', { ascending: false });
-
-                if (selectedWholesaler !== 'Todos' && selectedWholesaler !== 'CATÁLOGO') {
-                    query.eq('wholesaler', selectedWholesaler);
-                }
-
-                const { data: bufferData, error: bufferError } = await query;
-                data = bufferData;
-                error = bufferError;
-            }
+            // Ahora solo consultamos 'productos', que contiene tanto los aprobados como los pendientes (travasije)
+            const { data, error } = await supabase
+                .from('productos')
+                .select('*')
+                .order('created_at', { ascending: false });
 
             if (error) throw error;
 
             const mappedData = (data || []).map(mapProductFromDB);
 
             setPendingProducts(mappedData);
-            if (mappedData.length > 0 && !selectedProduct) {
-                setSelectedProduct(mappedData[0]);
-                setCatalogViewerImage(mappedData[0].images[0]);
-            }
+            // Selección automática eliminada por @seo_mkt: No mostrar productos por defecto
+            // if (mappedData.length > 0 && !selectedProduct) {
+            //     setSelectedProduct(mappedData[0]);
+            //     setCatalogViewerImage(mappedData[0].images[0]);
+            // }
         } catch (error) {
-            console.error('Error al cargar datos:', error);
+            console.error('Error al cargar datos del catálogo unificado:', error);
         } finally {
             setLoading(false);
+        }
+    };
+    // Cargar productos del buffer
+    useEffect(() => {
+        if (isOpen) {
+            fetchPendingProducts();
+        }
+    }, [isOpen, activeTab]);
+
+    const handleInsumoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+
+        const fileArray = Array.from(files);
+        setInsumoFiles(fileArray);
+        setInsumoFile(fileArray[0]); // Set first as active for transformation
+        setLoading(true);
+
+        try {
+            const target = insumoDestination === 'marketing' ? 'email' : 'web';
+            const blobs: Blob[] = [];
+            const previews: string[] = [];
+
+            for (const file of fileArray) {
+                // For now, only the first image gets the transformation applied via UI. 
+                // Others are optimized with default transformation (or same if desired).
+                // User can select another image in UI to transform it (TODO).
+                const { blob } = await optimizeImage(file, target, file === fileArray[0] ? insumoTransform : { zoom: 1, rotation: 0, flipX: false, aspectRatio: 'original', offsetX: 0, offsetY: 0 });
+                blobs.push(blob);
+                previews.push(URL.createObjectURL(blob));
+            }
+
+            setInsumoOptimizedBlobs(blobs);
+            setInsumoPreviews(previews);
+            setInsumoOptimizedBlob(blobs[0]);
+            setInsumoPreview(previews[0]);
+
+            // Calcular ahorro del primero para feedback inmediato
+            const originalSize = fileArray[0].size;
+            const optimizedSize = blobs[0].size;
+            const saving = Math.round(((originalSize - optimizedSize) / originalSize) * 100);
+            setInsumoSavingPercentage(saving);
+        } catch (err) {
+            console.error('Error optimizando insumo:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleCancelInsumo = () => {
+        insumoPreviews.forEach(p => URL.revokeObjectURL(p));
+        setInsumoFile(null);
+        setInsumoFiles([]);
+        setInsumoPreview(null);
+        setInsumoPreviews([]);
+        setInsumoOptimizedBlob(null);
+        setInsumoOptimizedBlobs([]);
+        setInsumoSavingPercentage(0);
+        setInsumoProductSearch('');
+        setInsumoSearchResults([]);
+        setInsumoTransform({
+            zoom: 1,
+            rotation: 0,
+            flipX: false,
+            aspectRatio: 'original' as any,
+            offsetX: 0,
+            offsetY: 0
+        });
+    };
+
+    const handleDriveFetch = async (targetFolderId?: string) => {
+        const idToFetch = targetFolderId || (driveSource === 'local' ? 'C:\\Users\\Mario\\Desktop' : driveFolderId);
+        if (!idToFetch.trim()) return;
+
+        setIsFetchingDrive(true);
+        try {
+            const apiEndpoint = driveSource === 'local' ? `/api/local-folder?path=${encodeURIComponent(idToFetch)}` : `/api/drive-folder?folderId=${idToFetch}`;
+            const response = await fetch(apiEndpoint);
+            const data = await response.json();
+
+            if (data.error) throw new Error(data.error);
+            setDriveItems(data.items || []);
+        } catch (err: any) {
+            console.error('Error fetching drive/local items:', err);
+            alert('Error al acceder al origen: ' + err.message);
+        } finally {
+            setIsFetchingDrive(false);
+        }
+    };
+
+    const handleDriveNavigate = (id: string) => {
+        setDriveNavigationStack(prev => [...prev, driveSource === 'local' ? (driveItems[0]?.id.split('\\').slice(0, -1).join('\\')) || 'C:\\Users\\Mario\\Desktop' : driveFolderId]);
+        if (driveSource !== 'local') setDriveFolderId(id);
+        handleDriveFetch(id);
+    };
+
+    const handleDriveBack = () => {
+        if (driveNavigationStack.length === 0) return;
+        const newStack = [...driveNavigationStack];
+        const parentId = newStack.pop()!;
+        setDriveNavigationStack(newStack);
+        setDriveFolderId(parentId);
+        handleDriveFetch(parentId);
+    };
+
+    const handleSelectDriveImage = async (url: string) => {
+        setLoading(true);
+        try {
+            // Si es local, la URL ya apunta a /api/local-asset, si es drive pasa por el proxy
+            const finalUrl = driveSource === 'local' ? url : `/api/drive-proxy?url=${encodeURIComponent(url)}`;
+            const response = await fetch(finalUrl);
+            if (!response.ok) {
+                console.error('Error al obtener la imagen:', response.statusText);
+                setLoading(false);
+                return;
+            }
+            const blob = await response.blob();
+            const file = new File([blob], `drive-image-${Date.now()}.jpg`, { type: 'image/jpeg' });
+
+            setInsumoFiles([file]);
+            setInsumoFile(file);
+
+            const target = insumoDestination === 'marketing' ? 'email' : 'web';
+            const { blob: optimizedBlob } = await optimizeImage(file, target, insumoTransform);
+
+            const previewUrl = URL.createObjectURL(optimizedBlob);
+            setInsumoOptimizedBlobs([optimizedBlob]);
+            setInsumoPreviews([previewUrl]);
+            setInsumoOptimizedBlob(optimizedBlob);
+            setInsumoPreview(previewUrl);
+
+            const originalSize = file.size;
+            const optimizedSize = optimizedBlob.size;
+            const saving = Math.round(((originalSize - optimizedSize) / originalSize) * 100);
+            setInsumoSavingPercentage(saving);
+
+        } catch (err) {
+            console.error('Error selecting drive image:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (insumoFile) {
+            const timer = setTimeout(async () => {
+                setLoading(true);
+                try {
+                    const target = insumoDestination === 'marketing' ? 'email' : 'web';
+                    const { blob } = await optimizeImage(insumoFile, target, insumoTransform);
+                    setInsumoOptimizedBlob(blob);
+
+                    // Sincronizar con el array de blobs para cuando se envíen todos
+                    const index = insumoFiles.indexOf(insumoFile);
+                    if (index !== -1) {
+                        setInsumoOptimizedBlobs(prev => {
+                            const next = [...prev];
+                            next[index] = blob;
+                            return next;
+                        });
+                    }
+
+                    if (insumoPreview) URL.revokeObjectURL(insumoPreview);
+                    const newUrl = URL.createObjectURL(blob);
+                    setInsumoPreview(newUrl);
+
+                    // Sincronizar preview en el array
+                    if (index !== -1) {
+                        setInsumoPreviews(prev => {
+                            const next = [...prev];
+                            next[index] = newUrl;
+                            return next;
+                        });
+                    }
+
+                    const saving = Math.round(((insumoFile.size - blob.size) / insumoFile.size) * 100);
+                    setInsumoSavingPercentage(saving);
+                } catch (err) {
+                    console.error('Error re-optimizando:', err);
+                } finally {
+                    setLoading(false);
+                }
+            }, 300);
+            return () => clearTimeout(timer);
+        }
+    }, [insumoTransform, insumoFile]);
+
+    const handleInsumoSend = async () => {
+        if (insumoOptimizedBlobs.length === 0) {
+            alert('Carga al menos una imagen');
+            return;
+        }
+
+        if (insumoDestination === 'catalog' && insumoCatalogAction === 'update' && !selectedProduct) {
+            alert('Atención: Debes buscar y validar (con el click) un producto existente en la lista antes de enviar la actualización.');
+            return;
+        }
+
+        setIsRoutingInsumo(true);
+        try {
+            const publicUrls: string[] = [];
+            const timestamp = Date.now();
+            const extension = insumoDestination === 'marketing' ? 'jpg' : 'webp';
+            const folder = insumoDestination === 'gallery' ? 'grilla' : insumoDestination === 'catalog' ? 'catalogo' : insumoDestination;
+
+            for (let i = 0; i < insumoOptimizedBlobs.length; i++) {
+                const blob = insumoOptimizedBlobs[i];
+                const fileName = `INSUMO-${timestamp}-${i}.${extension}`;
+
+                // Si es marketing, NO subimos todavía al storage (evitar guardado prematuro)
+                // Nota: El flujo de marketing parece estar diseñado para una sola imagen "preparada"
+                if (insumoDestination === 'marketing' && i === 0) {
+                    const localUrl = URL.createObjectURL(blob);
+                    setActiveImage(localUrl);
+                    setActiveTab('marketing');
+                    alert(`Imagen preparada para MARKETING`);
+                    setIsRoutingInsumo(false);
+                    return;
+                }
+
+                // Para otros destinos, subimos al storage
+                const filePath = `${folder}/${fileName}`;
+                const { error } = await supabase.storage
+                    .from('imagenes-marketing')
+                    .upload(filePath, blob, { contentType: extension === 'jpg' ? 'image/jpeg' : 'image/webp' });
+
+                if (error) throw error;
+
+                const { data: { publicUrl: uploadedUrl } } = supabase.storage
+                    .from('imagenes-marketing')
+                    .getPublicUrl(filePath);
+
+                publicUrls.push(uploadedUrl);
+            }
+
+            if (publicUrls.length > 0) {
+                setActiveImage(publicUrls[0]); // Mantener la primera como activa para previsualizaciones
+            }
+
+            if (insumoDestination === 'catalog') {
+                if (insumoCatalogAction === 'update' && selectedProduct) {
+                    // Actualizar producto seleccionado
+                    const updatedImages = insumoUpdateMode === 'replace'
+                        ? publicUrls
+                        : [...selectedProduct.images, ...publicUrls];
+
+                    handleUpdateProduct({ images: updatedImages });
+                    setIsAddingNew(false);
+                    setCatalogViewerImage(publicUrls[0]);
+                    setUpdatedProductIds(prev => new Set(prev).add(selectedProduct.id));
+                    setActiveTab('catalog');
+                    alert(`¡Producto ${selectedProduct.nombre} actualizado (${insumoUpdateMode === 'replace' ? 'Reemplazo' : 'Anexo'}) correctamente!`);
+                } else {
+                    // Preparar el form de "Nuevo Producto"
+                    setCatalogViewerImage(publicUrls[0]);
+                    handleOpenNew();
+                    setNewProductForm(prev => ({
+                        ...prev,
+                        images: publicUrls // Pasamos todas las URLs generadas
+                    }));
+                    setActiveManualImage(publicUrls[0]);
+                    setActiveTab('catalog');
+                }
+            } else if (insumoDestination === 'gallery') {
+                setActiveTab('gallery');
+                fetchGallery(selectedGallerySection);
+            } else if (insumoDestination === 'hero') {
+                setActiveTab('hero');
+            } else if (insumoDestination === 'marketing') {
+                setActiveTab('marketing');
+            }
+
+            // Protocolo @constructor: Limpiador de imagen post-envío
+            insumoPreviews.forEach(url => URL.revokeObjectURL(url));
+            setInsumoFile(null);
+            setInsumoFiles([]);
+            setInsumoPreview(null);
+            setInsumoPreviews([]);
+            setInsumoOptimizedBlob(null);
+            setInsumoOptimizedBlobs([]);
+            setInsumoSavingPercentage(0);
+            if (insumoDestination !== 'catalog') {
+                setActiveImage(null);
+            }
+
+            alert(`¡${publicUrls.length} imágenes enviadas a ${insumoDestination.toUpperCase()} con éxito!`);
+        } catch (err) {
+            console.error('Error enviando insumo:', err);
+            alert('Error al enviar el insumo');
+        } finally {
+            setIsRoutingInsumo(false);
         }
     };
 
     const handleProductSelect = (p: PendingProduct) => {
         setSelectedProduct(p);
         setCatalogViewerImage(p.images[0]);
-        // Limpiar imagen de Insumo para evitar conflictos en Marketing/Hero
         setActiveImage(null);
     };
 
-    // Funciones para GestiÍn de GALERÍAS
+    const fetchMarketingStorage = async () => {
+        setMarketingLibraryLoading(true);
+        try {
+            // Listamos archivos del bucket 'imagenes-marketing'
+            // El bucket contiene archivos MKT-xxx.jpg o INSUMO-xxx.jpg
+            const { data, error } = await supabase.storage
+                .from('imagenes-marketing')
+                .list('', {
+                    limit: 100,
+                    offset: 0,
+                    sortBy: { column: 'created_at', order: 'desc' }
+                });
+
+            if (error) throw error;
+
+            if (data) {
+                const urls = data
+                    .filter(f => f.name.endsWith('.jpg') || f.name.endsWith('.jpeg'))
+                    .map(f => {
+                        const { data: { publicUrl } } = supabase.storage
+                            .from('imagenes-marketing')
+                            .getPublicUrl(f.name);
+                        return publicUrl;
+                    });
+                setMarketingLibraryImages(urls);
+            }
+        } catch (err) {
+            console.error('Error cargando biblioteca de marketing:', err);
+        } finally {
+            setMarketingLibraryLoading(false);
+        }
+    };
+
+    // Efecto para cargar biblioteca al entrar a Hero
+    useEffect(() => {
+        if (isOpen && activeTab === 'hero') {
+            fetchMarketingStorage();
+        }
+    }, [isOpen, activeTab]);
+
+    // Funciones para Gestión de GRILLA
     const fetchGallery = async (section: string) => {
         try {
             const { data, error } = await supabase
                 .from('web_contenido')
                 .select('content')
-                .eq('section', section)
-                .maybeSingle();
+                .eq('section', 'gallery')
+                .single();
 
-            if (error) {
-                console.warn('Note: Section not found or error fetching:', section);
-                setGalleryImages([]);
-                return;
-            }
+            if (error) throw error;
 
-            setGalleryImages(data?.content?.gallery || []);
+            const content = data?.content || { sections: [] };
+            const currentSection = content.sections.find((s: any) => s.id === section || s.title1 === section);
+            setGalleryImages(currentSection?.gallery || []);
         } catch (err) {
-            console.error('Unexpected error fetching gallery:', err);
-            setGalleryImages([]);
+            console.error('Error fetching gallery section:', err);
         }
     };
+
+
 
     useEffect(() => {
         if (activeTab === 'gallery') {
             fetchGallery(selectedGallerySection);
         }
-    }, [activeTab, selectedGallerySection]);
+    }, [activeTab, selectedGallerySection, content]);
 
     const handleGalleryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
@@ -285,13 +638,13 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
 
                 const { data: uploadData, error: uploadError } = await supabase.storage
                     .from('imagenes-marketing')
-                    .upload(`galerias/${fileName}`, optimizedBlob, { contentType: 'image/webp' });
+                    .upload(`grilla/${fileName}`, optimizedBlob, { contentType: 'image/webp' });
 
                 if (uploadError) throw uploadError;
 
                 const { data: { publicUrl } } = supabase.storage
                     .from('imagenes-marketing')
-                    .getPublicUrl(`galerias/${fileName}`);
+                    .getPublicUrl(`grilla/${fileName}`);
 
                 newImages.push(publicUrl);
             }
@@ -328,6 +681,49 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
         }
     };
 
+    const handleAssignToGrilla = async () => {
+        if (!activeImage || !selectedGallerySection) {
+            alert('Selecciona una imagen y una sección');
+            return;
+        }
+
+        setIsSaving(true);
+        try {
+            const { data: current } = await supabase
+                .from('web_contenido')
+                .select('content')
+                .eq('section', 'gallery')
+                .single();
+
+            const content = current?.content || { sections: [] };
+            const updatedSections = (content.sections || []).map((sec: any) => {
+                if (sec.id === selectedGallerySection || sec.title1 === selectedGallerySection) {
+                    const currentGallery = Array.isArray(sec.gallery) ? sec.gallery : [];
+                    return { ...sec, gallery: [...currentGallery, activeImage] };
+                }
+                return sec;
+            });
+
+            const { error } = await supabase
+                .from('web_contenido')
+                .upsert({
+                    section: 'gallery',
+                    content: { ...content, sections: updatedSections },
+                    updated_by: 'CatalogHub'
+                }, { onConflict: 'section' });
+
+            if (error) throw error;
+            alert('Imagen asignada a la sección con éxito');
+            setActiveImage(null); // Limpiador post-guardado
+            fetchGallery(selectedGallerySection);
+        } catch (err) {
+            console.error('Error asignando a grilla:', err);
+            alert('Error al asignar imagen');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
     const handleRemoveGalleryImage = async (index: number) => {
         const newImages = galleryImages.filter((_, i) => i !== index);
 
@@ -335,19 +731,22 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
             const { data: currentData } = await supabase
                 .from('web_contenido')
                 .select('content')
-                .eq('section', selectedGallerySection)
+                .eq('section', 'gallery')
                 .single();
 
-            const updatedContent = {
-                ...(currentData?.content || {}),
-                gallery: newImages
-            };
+            const content = currentData?.content || { sections: [] };
+            const updatedSections = (content.sections || []).map((sec: any) => {
+                if (sec.id === selectedGallerySection || sec.title1 === selectedGallerySection) {
+                    return { ...sec, gallery: newImages };
+                }
+                return sec;
+            });
 
             const { error: updateError } = await supabase
                 .from('web_contenido')
                 .upsert({
-                    section: selectedGallerySection,
-                    content: updatedContent,
+                    section: 'gallery',
+                    content: { ...content, sections: updatedSections },
                     updated_by: 'CatalogHub-Gallery'
                 }, { onConflict: 'section' });
 
@@ -369,17 +768,14 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
         let finalMainImage = catalogViewerImage;
 
         try {
-            // OPTIMIZACIíN DE IMAGEN: Si la imagen es externa o no estÍ optimizada, la procesamos
+            // OPTIMIZACIÓN DE IMAGEN
             const isExternal = !catalogViewerImage.includes('supabase.co');
             const isBlob = catalogViewerImage.startsWith('blob:');
 
             if (isExternal || isBlob) {
                 try {
-                    console.log('?? Optimizando imagen para publicaciín...');
-
                     let blob: Blob;
                     if (isBlob) {
-                        // Si es un blob local (reciín cargado), lo obtenemos de los archivos pendientes o del fetch
                         const file = pendingFiles[catalogViewerImage];
                         if (file) {
                             const result = await optimizeImage(file);
@@ -391,7 +787,6 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                             blob = result.blob;
                         }
                     } else {
-                        // Si es una URL externa (Stocksur, etc.)
                         const res = await fetch(catalogViewerImage);
                         if (!res.ok) throw new Error('No se pudo descargar la imagen externa');
                         const originalBlob = await res.blob();
@@ -399,53 +794,54 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                         blob = result.blob;
                     }
 
-                    // Subir a Supabase Storage (imagenes-marketing)
-                    const fileName = `PROD-${selectedProduct.external_id}-${Date.now()}.webp`;
-                    const { data: uploadData, error: uploadError } = await supabase.storage
+                    const fileName = `PROD-${selectedProduct.sku_externo}-${Date.now()}.webp`;
+                    const filePath = `catalogo/${fileName}`;
+
+                    const { error: uploadError } = await supabase.storage
                         .from('imagenes-marketing')
-                        .upload(fileName, blob, { contentType: 'image/webp' });
+                        .upload(filePath, blob, { contentType: 'image/webp' });
 
                     if (uploadError) throw uploadError;
 
                     const { data: { publicUrl } } = supabase.storage
                         .from('imagenes-marketing')
-                        .getPublicUrl(fileName);
+                        .getPublicUrl(filePath);
 
                     finalMainImage = publicUrl;
-                    console.log('? Imagen optimizada y subida:', finalMainImage);
                 } catch (optError) {
-                    console.error('?? Fallí la optimizaciín automÍtica (posible COR), usando original:', optError);
-                    // No bloqueamos la publicaciÍn si falla la optimizaciÍn (COR es comÍn)
+                    console.error('Fallo la optimización automática:', optError);
                 }
             }
 
-            // 1. Marcar como aprobado en Supabase con los datos editados
+            // 1. Marcar como aprobado en la tabla 'productos' con TODOS los metadatos actualizados
             const { error } = await supabase
-                .from('agent_buffer')
+                .from('productos')
                 .update({
                     status: 'approved',
-                    name: selectedProduct.name,
-                    original_description: selectedProduct.original_description,
-                    technical_specs: {
-                        ...selectedProduct.technical_specs,
-                        is_premium: selectedProduct.is_premium,
-                        seo_title: selectedProduct.seo_title,
-                        seo_keywords: selectedProduct.seo_keywords,
-                        seo_description: selectedProduct.seo_description,
-                        for_marketing: selectedProduct.for_marketing
-                    },
-                    images: [finalMainImage, ...selectedProduct.images.filter(i => i !== catalogViewerImage)]
+                    wholesaler: selectedProduct.wholesaler,
+                    sku_externo: selectedProduct.sku_externo,
+                    nombre: selectedProduct.nombre,
+                    descripcion: selectedProduct.descripcion,
+                    categoria: (selectedProduct.category || 'OTRO').trim().toUpperCase(),
+                    features: selectedProduct.technical_specs,
+                    is_premium: selectedProduct.is_premium,
+                    seo_title: selectedProduct.seo_title,
+                    seo_keywords: selectedProduct.seo_keywords,
+                    seo_description: selectedProduct.seo_description,
+                    for_marketing: selectedProduct.for_marketing,
+                    imagen_principal: finalMainImage,
+                    imagenes_galeria: [finalMainImage, ...selectedProduct.images.filter(i => i !== catalogViewerImage)]
                 })
                 .eq('id', selectedProduct.id);
 
             if (error) throw error;
 
-            // 2. Aquí normalmente se integraría al catalog.json (en un flujo automatizado)
-            setPendingProducts(prev => prev.filter(p => p.id !== selectedProduct.id));
+            // Actualizar UI
+            fetchPendingProducts(); // Recargar para limpiar
             setSelectedProduct(null);
             setCatalogViewerImage(null);
 
-            alert('íProducto Publicado y Optimizado! El sistema lo integrarí en el catílogo.');
+            alert('¡Producto Publicado y Optimizado en el catálogo vivo!');
         } catch (error) {
             console.error('Error al publicar:', error);
             alert('Error al publicar el producto');
@@ -456,7 +852,7 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
 
     const handleCreateManual = async () => {
         // Validamos Título e Imígenes
-        if (!newProductForm.original_description || !newProductForm.images || newProductForm.images.length === 0) {
+        if (!newProductForm.descripcion || !newProductForm.images || newProductForm.images.length === 0) {
             alert('El Título y al menos una imagen son obligatorios para guardar.');
             return;
         }
@@ -476,7 +872,7 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                         try {
                             const { blob: optimizedBlob } = await optimizeImage(file);
                             const fileName = `${Math.random()}-${Date.now()}.webp`;
-                            const filePath = `catalog-manual/${fileName}`;
+                            const filePath = `catalogo/${fileName}`;
 
                             const { error: uploadError } = await supabase.storage
                                 .from('imagenes-marketing')
@@ -505,42 +901,63 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                 ? [mainImageUrl, ...finalImageUrls.filter(url => url !== mainImageUrl)]
                 : finalImageUrls;
 
-            // Construir el objeto de inserciÍn explícitamente
+            // Construir el objeto de inserción explícitamente para la tabla 'productos'
             const productToInsert = {
                 wholesaler: newProductForm.wholesaler || 'Manual',
-                external_id: newProductForm.external_id || `MAN-${Date.now().toString().slice(-6)}`,
-                name: (newProductForm.name || newProductForm.original_description || '').trim(),
-                original_description: (newProductForm.original_description || '').trim(),
-                // Almacenamos la categoría dentro de technical_specs ya que la columna no existe en la DB
-                images: orderedImages,
-                technical_specs: {
-                    category: (newProductForm.category || 'OTRO').trim().toUpperCase(),
-                    specs: newProductForm.technical_specs || [],
-                    is_premium: newProductForm.is_premium || false,
-                    seo_title: newProductForm.seo_title || '',
-                    seo_keywords: newProductForm.seo_keywords || '',
-                    seo_description: newProductForm.seo_description || '',
-                    for_marketing: newProductForm.for_marketing || false
-                },
-                status: 'pending',
-                found_at: new Date().toISOString()
+                sku_externo: newProductForm.sku_externo || `MAN-${Date.now().toString().slice(-6)}`,
+                nombre: (newProductForm.nombre || newProductForm.descripcion || '').trim(),
+                descripcion: (newProductForm.descripcion || '').trim(),
+                categoria: (newProductForm.category || 'OTRO').trim().toUpperCase(),
+                imagen_principal: orderedImages[0] || '',
+                imagenes_galeria: orderedImages,
+                features: newProductForm.technical_specs || [],
+                is_premium: newProductForm.is_premium || false,
+                seo_title: newProductForm.seo_title || '',
+                seo_keywords: newProductForm.seo_keywords || '',
+                seo_description: newProductForm.seo_description || '',
+                for_marketing: newProductForm.for_marketing || false,
+                status: 'approved',
+                created_at: new Date().toISOString()
             };
 
-            const { data, error } = await supabase
-                .from('agent_buffer')
-                .upsert([productToInsert], { onConflict: 'external_id' })
-                .select();
+            // Protocolo @adn: Verificación manual de existencia para evitar error de ON CONFLICT si no hay índice único
+            const { data: existingProduct } = await supabase
+                .from('productos')
+                .select('id')
+                .eq('sku_externo', productToInsert.sku_externo)
+                .single();
+
+            let result;
+            if (existingProduct) {
+                result = await supabase
+                    .from('productos')
+                    .update(productToInsert)
+                    .eq('id', existingProduct.id)
+                    .select();
+            } else {
+                result = await supabase
+                    .from('productos')
+                    .insert([productToInsert])
+                    .select();
+            }
+
+            const { data, error } = result;
 
             if (error) {
                 console.error('Error de Supabase:', error);
                 throw new Error(error.message);
             }
 
-            if (data) {
+            if (data && data.length > 0) {
                 const formattedProduct = mapProductFromDB(data[0]);
-                setPendingProducts([formattedProduct, ...pendingProducts]);
+                setPendingProducts(prev => {
+                    const exists = prev.find(p => p.id === formattedProduct.id);
+                    if (exists) return prev.map(p => p.id === formattedProduct.id ? formattedProduct : p);
+                    return [formattedProduct, ...prev];
+                });
                 setSelectedProduct(formattedProduct);
                 setCatalogViewerImage(formattedProduct.images[0]);
+                setUpdatedProductIds(prev => new Set(prev).add(formattedProduct.id));
                 setIsAddingNew(false);
 
                 // Limpiar ObjectURLs para evitar fugas de memoria
@@ -548,16 +965,16 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                 setPendingFiles({});
 
                 setNewProductForm({
-                    name: '',
-                    original_description: '',
+                    nombre: '',
+                    descripcion: '',
                     images: [],
                     wholesaler: 'Manual',
                     category: 'BOTELLA, MUG Y TAZA',
-                    external_id: 'MAN-' + Date.now().toString().slice(-6),
+                    sku_externo: 'MAN-' + Date.now().toString().slice(-6),
                     is_premium: false,
                     technical_specs: []
                 });
-                alert('íProducto creado exitosamente en el buffer!');
+                alert(existingProduct ? '¡Producto actualizado exitosamente!' : '¡Producto creado exitosamente!');
             }
         } catch (error: any) {
             console.error('Error al crear producto:', error);
@@ -584,9 +1001,10 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                     const ctx = canvas.getContext('2d');
                     if (!ctx) return reject('No se pudo obtener el contexto del canvas');
 
-                    // 1. Determinar dimensiones base segÍn Target
+                    // 1. Determinar dimensiones base según Target
                     const MAX_WIDTH = target === 'web' ? 1600 : 800;
                     const QUALITY = target === 'web' ? 0.82 : 0.75;
+                    const MIME_TYPE = target === 'email' ? 'image/jpeg' : 'image/webp';
 
                     let baseWidth = img.width;
                     let baseHeight = img.height;
@@ -597,7 +1015,7 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                         baseHeight = img.height * scaleFactor;
                     }
 
-                    // 2. Determinar dimensiones de salida segÍn Aspect Ratio
+                    // 2. Determinar dimensiones de salida según Aspect Ratio
                     let finalWidth = baseWidth;
                     let finalHeight = baseHeight;
 
@@ -614,9 +1032,14 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                     canvas.width = finalWidth;
                     canvas.height = finalHeight;
 
+                    // Para JPEG necesitamos fondo blanco (no transparencia), se aplica antes de dibujar la imagen
+                    if (MIME_TYPE === 'image/jpeg') {
+                        ctx.fillStyle = '#FFFFFF';
+                        ctx.fillRect(0, 0, finalWidth, finalHeight);
+                    }
+
                     // 3. Aplicar Transformaciones
                     ctx.save();
-                    // El translate incluye ahora el encuadre manual (drag)
                     ctx.translate((canvas.width / 2) + transform.offsetX, (canvas.height / 2) + transform.offsetY);
 
                     if (transform.flipX) ctx.scale(-1, 1);
@@ -628,7 +1051,6 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                     ctx.imageSmoothingEnabled = true;
                     ctx.imageSmoothingQuality = 'high';
 
-                    // Dibujar centrando la imagen original
                     ctx.drawImage(img, -img.width / 2, -img.height / 2);
                     ctx.restore();
 
@@ -638,257 +1060,29 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                         } else {
                             reject('Error al generar blob');
                         }
-                    }, 'image/webp', QUALITY);
+                    }, MIME_TYPE, QUALITY);
                 };
             };
             reader.onerror = (e) => reject(e);
         });
     };
 
-    // Reprocesar insumo si cambia el target o las transformaciones
-    useEffect(() => {
-        if (insumoFile) {
-            const reprocess = async () => {
-                setIsProcessingInsumo(true);
-                try {
-                    const result = await optimizeImage(insumoFile, insumoTarget, insumoTransform);
-                    const optimizedUrl = URL.createObjectURL(result.blob);
-
-                    setInsumoMetadata(prev => prev ? {
-                        ...prev,
-                        optimizedSize: result.blob.size,
-                        optimizedWidth: Math.round(result.width),
-                        optimizedHeight: Math.round(result.height),
-                        optimizedUrl: optimizedUrl,
-                        optimizedBlob: result.blob
-                    } : null);
-                } catch (err) {
-                    console.error(err);
-                } finally {
-                    setIsProcessingInsumo(false);
-                }
-            };
-            reprocess();
-        }
-    }, [insumoTarget, insumoTransform]);
 
 
 
 
-    const handleInsumoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-
-        setInsumoFile(file);
-        setIsProcessingInsumo(true);
-
-        try {
-            setInsumoAISEOFilename(null); // Resetear nombre IA anterior
-            // Obtener dimensiones originales
-            const originalMeta = await new Promise<{ w: number, h: number }>((res) => {
-                const img = new Image();
-                img.src = URL.createObjectURL(file);
-                img.onload = () => res({ w: img.width, h: img.height });
-            });
-
-            const result = await optimizeImage(file, insumoTarget);
-
-            const optimizedUrl = URL.createObjectURL(result.blob);
-
-            setInsumoMetadata({
-                originalSize: file.size,
-                originalWidth: originalMeta.w,
-                originalHeight: originalMeta.h,
-                optimizedSize: result.blob.size,
-                optimizedWidth: result.width,
-                optimizedHeight: result.height,
-                optimizedUrl: optimizedUrl,
-                optimizedBlob: result.blob
-            });
-        } catch (err) {
-            console.error(err);
-            alert("Error al procesar insumo");
-        } finally {
-            setIsProcessingInsumo(false);
-        }
-    };
-
-    const handleGenerateInsumoAIFileName = async () => {
-        if (!insumoMetadata?.optimizedUrl) return;
-        setIsProcessingInsumo(true);
-        try {
-            const name = await generateSEOFilenameAI(
-                insumoMetadata.optimizedUrl,
-                selectedGallerySection || selectedProduct?.category || "",
-                selectedProduct?.name || ""
-            );
-            setInsumoAISEOFilename(name);
-        } catch (err: any) {
-            console.error(err);
-            alert(`Error de IA: ${err.message || 'Error desconocido'}`);
-        } finally {
-            setIsProcessingInsumo(false);
-        }
-    };
 
 
-
-    const handleRouteInsumo = async (destination: 'catalog' | 'hero' | 'gallery' | 'marketing') => {
-        if (!insumoMetadata?.optimizedUrl || !insumoMetadata.optimizedBlob) return;
-
-        if (destination === 'catalog') {
-            setIsAddingNew(true);
-            const finalImage = insumoMetadata.optimizedUrl!;
-            setNewProductForm(prev => ({
-                ...prev,
-                images: [finalImage]
-            }));
-            setActiveManualImage(finalImage);
-            setActiveTab('catalog');
-        } else if (destination === 'hero') {
-            setIsSaving(true);
-            try {
-                const fileName = insumoAISEOFilename
-                    ? `HERO-${insumoAISEOFilename}-${Date.now()}.webp`
-                    : `HERO-INSUMO-${Date.now()}.webp`;
-
-                const { error: uploadError } = await supabase.storage
-                    .from('imagenes-marketing')
-                    .upload(`hero/${fileName}`, insumoMetadata.optimizedBlob!, { contentType: 'image/webp' });
-
-                if (uploadError) throw uploadError;
-
-                const { data: { publicUrl } } = supabase.storage
-                    .from('imagenes-marketing')
-                    .getPublicUrl(`hero/${fileName}`);
-
-                setActiveImage(publicUrl);
-                setActiveTab('hero');
-                setTimeout(() => alert('Imagen subida a la nube con éxito. Ahora selecciona en qué Slide (1, 2 o 3) quieres aplicarla.'), 300);
-            } catch (err) {
-                console.error('Error subiendo imagen para hero:', err);
-                alert('Error al subir imagen al servidor.');
-            } finally {
-                setIsSaving(false);
-            }
-        } else if (destination === 'marketing') {
-            setIsSaving(true);
-            try {
-                // Convertir WebP a JPEG para compatibilidad con Outlook (no soporta WebP)
-                const jpegBlob = await new Promise<Blob>((resolve, reject) => {
-                    const img = new Image();
-                    img.onload = () => {
-                        const canvas = document.createElement('canvas');
-                        canvas.width = img.width;
-                        canvas.height = img.height;
-                        const ctx = canvas.getContext('2d')!;
-                        ctx.drawImage(img, 0, 0);
-                        canvas.toBlob((blob) => {
-                            if (blob) resolve(blob);
-                            else reject(new Error('Error al convertir imagen a JPEG'));
-                        }, 'image/jpeg', 0.90);
-                    };
-                    img.onerror = reject;
-                    img.src = insumoMetadata.optimizedUrl!;
-                });
-
-                const fileName = insumoAISEOFilename
-                    ? `MKT-${insumoAISEOFilename}-${Date.now()}.jpg`
-                    : `MKT-INSUMO-${Date.now()}.jpg`;
-
-                const { error: uploadError } = await supabase.storage
-                    .from('imagenes-marketing')
-                    .upload(fileName, jpegBlob, { contentType: 'image/jpeg' });
-
-                if (uploadError) throw uploadError;
-
-                const { data: { publicUrl } } = supabase.storage
-                    .from('imagenes-marketing')
-                    .getPublicUrl(fileName);
-
-                // Usar la URL pública (no el blob: temporal)
-                setActiveImage(publicUrl);
-                // Limpiamos el producto seleccionado para evitar que la IA confunda el contexto
-                setSelectedProduct(null);
-                setActiveTab('marketing');
-            } catch (err) {
-                console.error('Error subiendo imagen para marketing:', err);
-                alert('Error al subir imagen. Usando versión local temporal.');
-                // Fallback: usar blob URL temporal (funciona para previsualizar pero no para enviar)
-                setActiveImage(insumoMetadata.optimizedUrl);
-                setSelectedProduct(null);
-                setActiveTab('marketing');
-            } finally {
-                setIsSaving(false);
-            }
-        } else if (destination === 'gallery') {
-            const targetSection = prompt('¿A qué galería deseas enviar esta imagen?\n\nOpciones sugeridas: mugs, botellas, mochilas, libretas, ecologicos, bolsas');
-
-            if (!targetSection) return;
-            const normalizedSection = targetSection.toLowerCase().trim();
-
-            setIsSaving(true);
-            try {
-                const fileName = insumoAISEOFilename
-                    ? `${insumoAISEOFilename}.webp`
-                    : `IN-GAL-${normalizedSection.toUpperCase()}-${Date.now()}.webp`;
-
-                const { error: uploadError } = await supabase.storage
-                    .from('imagenes-marketing')
-                    .upload(`galerias/${fileName}`, insumoMetadata.optimizedBlob!, { contentType: 'image/webp' });
-
-                if (uploadError) throw uploadError;
-
-                const { data: { publicUrl } } = supabase.storage
-                    .from('imagenes-marketing')
-                    .getPublicUrl(`galerias/${fileName}`);
-
-                // Fetch data for the chosen section
-                const { data: currentData } = await supabase
-                    .from('web_contenido')
-                    .select('content')
-                    .eq('section', normalizedSection)
-                    .maybeSingle();
-
-                const currentGallery = currentData?.content?.gallery || [];
-                const newGallery = [...currentGallery, publicUrl];
-
-                const updatedContent = {
-                    ...(currentData?.content || {}),
-                    gallery: newGallery
-                };
-
-                await supabase
-                    .from('web_contenido')
-                    .upsert({
-                        section: normalizedSection,
-                        content: updatedContent,
-                        updated_by: 'CatalogHub-Insumo'
-                    }, { onConflict: 'section' });
-
-                // Actualizar estado local para reflejar cambios
-                setSelectedGallerySection(normalizedSection);
-                setGalleryImages(newGallery);
-                setActiveTab('gallery');
-                alert(`¡Imagen guardada en galería de ${normalizedSection.toUpperCase()}!`);
-            } catch (err) {
-                console.error(err);
-                alert('Error al enviar a galería: ' + (err as any).message);
-            } finally {
-                setIsSaving(false);
-            }
-        }
-    };
 
     const handleOpenNew = () => {
         setIsAddingNew(true);
         setNewProductForm({
-            name: '',
-            original_description: '',
+            nombre: '',
+            descripcion: '',
             images: [],
-            wholesaler: selectedWholesaler === 'Todos' ? 'Stocksur' : selectedWholesaler,
+            wholesaler: 'Stocksur',
             category: 'Mug',
-            external_id: `MAN-${Date.now().toString().slice(-6)}`,
+            sku_externo: `MAN-${Date.now().toString().slice(-6)}`,
             is_premium: false,
             technical_specs: []
         });
@@ -910,34 +1104,22 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
 
         setIsSaving(true);
         try {
-            const section = 'hero';
-            // slideIndex llega como 0, 1, 2
             const heroKey = slideIndex === 0 ? 'background_image' : `background_image_${slideIndex + 1}`;
 
-            const { data: currentData } = await supabase
-                .from('web_contenido')
-                .select('content')
-                .eq('section', section)
-                .single();
-
-            const currentContent = currentData?.content || {};
-            const updatedContent = {
-                ...currentContent,
+            // Protocolo @constructor: Usar el hook oficial para sincronización reactiva inmediata
+            const success = await updateSection('hero', {
                 [heroKey]: activeImage,
                 // Solo actualizamos el título si hay un producto seleccionado
-                ...(slideIndex === 0 && selectedProduct ? { title: (selectedProduct.seo_title || selectedProduct.name).toUpperCase() } : {})
-            };
+                ...(slideIndex === 0 && selectedProduct ? { title1: (selectedProduct.seo_title || selectedProduct.nombre).toUpperCase() } : {})
+            });
 
-            const { error } = await supabase
-                .from('web_contenido')
-                .upsert({
-                    section,
-                    content: updatedContent,
-                    updated_by: 'CatalogHub'
-                }, { onConflict: 'section' });
-
-            if (error) throw error;
-            alert(`ÍSlide Hero ${slideIndex} actualizado con íxito!`);
+            if (success) {
+                alert(`¡Slide Hero ${slideIndex + 1} actualizado con éxito!`);
+                setActiveImage(null); // Limpiador post-guardado
+                setCatalogViewerImage(null);
+            } else {
+                throw new Error('No se pudo actualizar la sección Hero');
+            }
         } catch (err) {
             console.error('Error setting hero:', err);
             alert('Error al actualizar el Hero');
@@ -953,26 +1135,78 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
         }
 
         setIsGeneratingAI(true);
-        setAiStatus('?? Gemini está analizando tu producto...');
+        setAiStatus('⚡ Sincronizando datos técnicos...');
         try {
-            // Si hay producto seleccionado, usamos sus datos. Si no, pedimos a la IA que analice la imagen pura.
-            const context = selectedProduct
-                ? `Producto: ${selectedProduct.name}\nDescripción: ${selectedProduct.seo_description || selectedProduct.original_description}\nSpecs: ${selectedProduct.technical_specs?.join(', ')}`
-                : "Analiza la imagen y deduce el producto, creando un copy de marketing atractivo.";
+            // PROTOCOLO @seo_mkt: Evitar "Leak de Contexto" (Caché de producto anterior)
+            let productForContext = null;
+            const keyword = marketingAiContext?.trim().toLowerCase();
+
+            // 1. Si el producto seleccionado coincide con la referencia (o no hay referencia), lo mantenemos
+            if (selectedProduct && (!keyword ||
+                selectedProduct.nombre.toLowerCase().includes(keyword) ||
+                (selectedProduct.category && selectedProduct.category.toLowerCase().includes(keyword)))) {
+                productForContext = selectedProduct;
+            }
+
+            // 2. Si hay una palabra de referencia y no coincide con el actual, buscamos uno mejor
+            if (keyword && keyword.length >= 2) {
+                // Intentamos singularizar (básico: quitar 's' si termina en 's') para mejor match
+                const singularKey = keyword.endsWith('s') ? keyword.slice(0, -1) : keyword;
+
+                const findMatch = (key: string) => pendingProducts.find(p =>
+                    p.nombre.toLowerCase().includes(key) ||
+                    (Array.isArray(p.technical_specs) && p.technical_specs.some((s: any) => String(s).toLowerCase().includes(key))) ||
+                    (p.category && p.category.toLowerCase().includes(key))
+                );
+
+                const match = findMatch(keyword) || (keyword !== singularKey ? findMatch(singularKey) : null);
+
+                if (match) {
+                    productForContext = match;
+                    setSelectedProduct(match);
+                    if (match.images?.[0]) setCatalogViewerImage(match.images[0]);
+                } else {
+                    // Buscar en DB si no está en memoria
+                    const { data: dbMatch } = await supabase
+                        .from('productos')
+                        .select('*')
+                        .or(`nombre.ilike.%${keyword}%,categoria.ilike.%${keyword}%,nombre.ilike.%${singularKey}%,categoria.ilike.%${singularKey}%`)
+                        .limit(1);
+
+                    if (dbMatch && dbMatch.length > 0) {
+                        const mapped = mapProductFromDB(dbMatch[0]);
+                        productForContext = mapped;
+                        setSelectedProduct(mapped);
+                        if (mapped.images?.[0]) setCatalogViewerImage(mapped.images[0]);
+                    } else if (productForContext && keyword && !productForContext.nombre.toLowerCase().includes(singularKey)) {
+                        // Si teníamos uno pero la nueva keyword no tiene NADA que ver, lo limpiamos para evitar el "efecto caché"
+                        productForContext = null;
+                    }
+                }
+            }
+
+            const context = productForContext
+                ? `Producto: ${productForContext.nombre}\nDescripción: ${productForContext.seo_description || productForContext.descripcion}\nSpecs: ${productForContext.technical_specs?.join(', ')}\nContexto Adicional: ${marketingAiContext}`
+                : `Referencia: ${marketingAiContext || 'Analiza la imagen y deduce el producto, creando un copy de marketing atractivo.'}`;
 
             const imageToUse = activeImage || catalogViewerImage || (selectedProduct?.images?.[0] || null);
 
             if (!imageToUse) throw new Error("No hay imagen disponible para generar contenido");
 
+            setAiStatus('🧠 Analizando activos con Gemini...');
             const content = await generateMarketingAI(imageToUse, context);
+
+            // @seo_mkt: Mantenemos el placeholder en el estado para poder reemplazarlo 
+            // con la URL final real al momento de guardar en Supabase.
             setGeneratedMarketing(content);
-            setAiStatus('? Contenido de Marketing generado');
+            setAiStatus('✨ Contenido de Marketing generado');
         } catch (err: any) {
-            console.error(err);
-            setAiStatus('? Error: ' + err.message);
+            console.error("[HUB_ERROR] AI Generation failed:", err);
+            setAiStatus('❌ ' + (err.message || 'Error en la IA'));
+            alert(err.message || 'Error al generar contenido');
         } finally {
             setIsGeneratingAI(false);
-            setTimeout(() => setAiStatus(''), 3000);
+            setTimeout(() => setAiStatus(''), 5000);
         }
     };
 
@@ -997,6 +1231,54 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
 
         setIsSaving(true);
         try {
+            let finalImageUrl = imageToUse;
+
+            // Protocolo @seo_mkt: TODAS las imágenes de marketing DEBEN ser JPG
+            // Si es un Blob o una URL WebP, forzamos la conversión/subida
+            const isBlob = imageToUse.startsWith('blob:');
+            const isWebP = imageToUse.toLowerCase().endsWith('.webp') || !imageToUse.toLowerCase().includes('.jp');
+
+            if (isBlob || isWebP) {
+                const response = await fetch(imageToUse);
+                const originalBlob = await response.blob();
+
+                let blobToUpload = originalBlob;
+
+                // Si no es JPEG, convertir usando un canvas temporal
+                if (originalBlob.type !== 'image/jpeg') {
+                    blobToUpload = await new Promise<Blob>((resolve, reject) => {
+                        const img = new Image();
+                        img.crossOrigin = "anonymous";
+                        img.onload = () => {
+                            const canvas = document.createElement('canvas');
+                            canvas.width = img.width;
+                            canvas.height = img.height;
+                            const ctx = canvas.getContext('2d');
+                            if (!ctx) return reject(new Error('Canvas context fail'));
+                            ctx.fillStyle = '#FFFFFF';
+                            ctx.fillRect(0, 0, canvas.width, canvas.height);
+                            ctx.drawImage(img, 0, 0);
+                            canvas.toBlob(b => b ? resolve(b) : reject(new Error('Blob fail')), 'image/jpeg', 0.9);
+                        };
+                        img.onerror = () => reject(new Error('Image load fail'));
+                        img.src = URL.createObjectURL(originalBlob);
+                    });
+                }
+
+                const fileName = `MKT-${Date.now()}.jpg`;
+                const { error: uploadError } = await supabase.storage
+                    .from('imagenes-marketing')
+                    .upload(fileName, blobToUpload, { contentType: 'image/jpeg' });
+
+                if (uploadError) throw uploadError;
+
+                const { data: { publicUrl } } = supabase.storage
+                    .from('imagenes-marketing')
+                    .getPublicUrl(fileName);
+
+                finalImageUrl = publicUrl;
+            }
+
             const { data: lastMsg } = await supabase
                 .from("marketing")
                 .select("nombre_envio")
@@ -1006,17 +1288,10 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
 
             const nextNumber = (lastMsg?.nombre_envio || 0) + 1;
             // Asegurar que usamos la imagen correcta en el HTML final
-            const finalHtml = generatedMarketing.html.replace('IMAGE_URL_PLACEHOLDER', imageToUse);
+            const finalHtml = generatedMarketing.html.replace('IMAGE_URL_PLACEHOLDER', finalImageUrl);
 
-            // Extraer nombre de archivo de la URL para Brevo
-            const nombreImagen = (() => {
-                try {
-                    const urlPath = new URL(imageToUse).pathname;
-                    return urlPath.split('/').pop() || `campaña-${nextNumber}.webp`;
-                } catch {
-                    return `campaña-${nextNumber}.webp`;
-                }
-            })();
+            // Extraer nombre de archivo de la URL
+            const nombreImagen = finalImageUrl.split('/').pop() || `campaña-${nextNumber}.jpg`;
 
             const { error } = await supabase
                 .from("marketing")
@@ -1025,14 +1300,18 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                     asunto: generatedMarketing.subject,
                     cuerpo_html: finalHtml,
                     cuerpo: `${generatedMarketing.part1}\n\n${generatedMarketing.part2}`,
-                    imagen_url: imageToUse,
+                    imagen_url: finalImageUrl,
                     nombre_imagen: nombreImagen,
                     activo: true
                 }]);
 
             if (error) throw error;
-            alert('ÍMensaje de marketing guardado correctamente!');
+            alert('¡Mensaje de marketing guardado correctamente!');
             setGeneratedMarketing(null);
+            // Si era un blob, liberamos memoria
+            if (imageToUse && imageToUse.startsWith('blob:')) URL.revokeObjectURL(imageToUse);
+            setActiveImage(null); // Protocolo @constructor: Limpiar tras guardar
+            setMarketingAiContext(''); // Limpia también el contexto de IA
         } catch (err: any) {
             console.error(err);
             alert('Error al guardar marketing: ' + err.message);
@@ -1049,7 +1328,7 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
         setIsGeneratingAI(true);
         setAiStatus('?? Generando contenido SEO para la Web...');
         try {
-            const context = `Producto: ${selectedProduct.name}\nCategoría: ${selectedProduct.category}`;
+            const context = `Producto: ${selectedProduct.nombre}\nCategoría: ${selectedProduct.category}`;
             const content = await generateWebAI(activeImage, context);
             setGeneratedWeb(content);
             setAiStatus('? Contenido Web generado');
@@ -1078,46 +1357,14 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
         setGeneratedWeb(null);
     };
 
-    const handleSaveChanges = async () => {
-        if (!selectedProduct) return;
-        setIsSaving(true);
-        try {
-            const { error } = await supabase
-                .from('agent_buffer')
-                .update({
-                    wholesaler: selectedProduct.wholesaler,
-                    external_id: selectedProduct.external_id,
-                    name: selectedProduct.name,
-                    images: [activeImage || selectedProduct.images[0], ...selectedProduct.images.filter(i => i !== (activeImage || selectedProduct.images[0]))],
-                    technical_specs: {
-                        category: (selectedProduct.category || 'OTRO').trim().toUpperCase(),
-                        specs: selectedProduct.technical_specs,
-                        is_premium: selectedProduct.is_premium,
-                        seo_title: selectedProduct.seo_title,
-                        seo_keywords: selectedProduct.seo_keywords,
-                        seo_description: selectedProduct.seo_description,
-                        for_marketing: selectedProduct.for_marketing
-                    }
-                })
-                .eq('id', selectedProduct.id);
-
-            if (error) throw error;
-            alert('ÍCambios guardados en el buffer!');
-        } catch (error) {
-            console.error('Error al guardar:', error);
-            alert('Error al guardar los cambios');
-        } finally {
-            setTimeout(() => setIsSaving(false), 500);
-        }
-    };
 
     const handleReject = async () => {
         if (!selectedProduct) return;
 
-        if (confirm('ÍEstÍs seguro de que quieres eliminar este producto PERMANENTEMENTE del buffer?')) {
+        if (confirm('¿Estás seguro de que quieres eliminar este producto PERMANENTEMENTE del catálogo?')) {
             try {
                 const { error } = await supabase
-                    .from('agent_buffer')
+                    .from('productos')
                     .delete()
                     .eq('id', selectedProduct.id);
 
@@ -1141,31 +1388,81 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
         if (activeImage === imgUrl) {
             setActiveImage(newImages[0] || null);
         }
+        if (catalogViewerImage === imgUrl) {
+            setCatalogViewerImage(newImages[0] || null);
+        }
     };
 
     const filteredProducts = pendingProducts.filter(p => {
-        const matchesWholesaler = selectedWholesaler === 'Todos' || p.wholesaler === selectedWholesaler;
-        const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
-            p.external_id.toLowerCase().includes(search.toLowerCase()) ||
-            p.category?.toLowerCase().includes(search.toLowerCase());
+        const searchLower = search.toLowerCase();
+        const matchesSearch = p.nombre.toLowerCase().includes(searchLower) ||
+            p.sku_externo.toLowerCase().includes(searchLower) ||
+            p.category?.toLowerCase().includes(searchLower);
 
-        return matchesWholesaler && matchesSearch;
+        if (selectedCategory !== 'TODAS') {
+            return matchesSearch && p.category?.toUpperCase() === selectedCategory.toUpperCase();
+        }
+
+        return matchesSearch;
     });
 
     useEffect(() => {
         if (!isOpen) return;
 
+        // Protocolo @seo_mkt: Solo auto-seleccionar si hay un filtro ACTIVO (búsqueda o categoría específica)
+        const hasActiveFilter = search.trim().length > 0 || selectedCategory !== 'TODAS';
+
         if (filteredProducts.length > 0) {
-            const isStillVisible = filteredProducts.some(p => p.id === selectedProduct?.id);
-            if (!isStillVisible) {
-                setSelectedProduct(filteredProducts[0]);
-                setActiveImage(filteredProducts[0].images[0]);
+            // Solo actualizamos si lo seleccionado ya no está en el filtro
+            const currentSelectedExists = selectedProduct && filteredProducts.some(p => p.id === selectedProduct.id);
+
+            if (!currentSelectedExists) {
+                if (hasActiveFilter) {
+                    const first = filteredProducts[0];
+                    setSelectedProduct(first);
+                    setCatalogViewerImage(first.images[0]);
+                } else {
+                    // Si no hay filtro activo y no hay selección previa válida, mantenemos limpio
+                    setSelectedProduct(null);
+                    setCatalogViewerImage(null);
+                }
             }
         } else {
             setSelectedProduct(null);
-            setActiveImage(null);
+            setCatalogViewerImage(null);
         }
-    }, [selectedWholesaler, search, selectedCategory, pendingProducts, isOpen]);
+    }, [search, selectedCategory, pendingProducts.length, isOpen]);
+
+    const handleAutoGenerateSEO = async () => {
+        if (!selectedProduct || !selectedProduct.technical_specs || selectedProduct.technical_specs.length === 0) {
+            alert("No hay características técnicas para analizar. Por favor, asegúrate de que el producto tenga especificaciones.");
+            return;
+        }
+
+        setIsGeneratingSEO(true);
+        try {
+            const response = await fetch('/api/generate-seo', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ technical_specs: selectedProduct.technical_specs })
+            });
+            const result = await response.json();
+            if (result.success && result.data) {
+                handleUpdateProduct({
+                    seo_title: result.data.seo_title || selectedProduct.seo_title,
+                    seo_keywords: result.data.seo_keywords || selectedProduct.seo_keywords,
+                    seo_description: result.data.seo_description || selectedProduct.seo_description
+                });
+            } else {
+                alert(`Error al generar SEO: ${result.error || "Formato inválido"}\n\nDetalles: ${result.details || "Sin detalles"}`);
+            }
+        } catch (e) {
+            alert("Error de conexión al generar SEO.");
+            console.error(e);
+        } finally {
+            setIsGeneratingSEO(false);
+        }
+    };
 
     return (
         <AnimatePresence>
@@ -1215,11 +1512,12 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                                 </h1>
 
                                 <div style={{ display: 'flex', gap: '30px', borderLeft: '1px solid rgba(255,255,255,0.1)', paddingLeft: '30px', marginLeft: '10px' }}>
+
                                     <button
                                         onClick={() => setActiveTab('insumo')}
                                         style={{ background: 'none', border: 'none', color: activeTab === 'insumo' ? 'var(--accent-turquoise)' : '#555', fontSize: '12px', fontWeight: '800', cursor: 'pointer', letterSpacing: '2px', textTransform: 'uppercase', padding: '10px 0', borderBottom: activeTab === 'insumo' ? '2px solid var(--accent-turquoise)' : '2px solid transparent', transition: 'all 0.3s' }}
                                     >
-                                        Insumo
+                                        INSUMO
                                     </button>
                                     <button
                                         onClick={() => setActiveTab('catalog')}
@@ -1231,19 +1529,19 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                                         onClick={() => setActiveTab('gallery')}
                                         style={{ background: 'none', border: 'none', color: activeTab === 'gallery' ? 'var(--accent-turquoise)' : '#555', fontSize: '12px', fontWeight: '800', cursor: 'pointer', letterSpacing: '2px', textTransform: 'uppercase', padding: '10px 0', borderBottom: activeTab === 'gallery' ? '2px solid var(--accent-turquoise)' : '2px solid transparent', transition: 'all 0.3s' }}
                                     >
-                                        GALERÍAS
+                                        GRILLA
                                     </button>
                                     <button
                                         onClick={() => setActiveTab('hero')}
                                         style={{ background: 'none', border: 'none', color: activeTab === 'hero' ? 'var(--accent-turquoise)' : '#555', fontSize: '12px', fontWeight: '800', cursor: 'pointer', letterSpacing: '2px', textTransform: 'uppercase', padding: '10px 0', borderBottom: activeTab === 'hero' ? '2px solid var(--accent-turquoise)' : '2px solid transparent', transition: 'all 0.3s' }}
                                     >
-                                        Hero
+                                        HERO
                                     </button>
                                     <button
                                         onClick={() => setActiveTab('marketing')}
                                         style={{ background: 'none', border: 'none', color: activeTab === 'marketing' ? 'var(--accent-turquoise)' : '#555', fontSize: '12px', fontWeight: '800', cursor: 'pointer', letterSpacing: '2px', textTransform: 'uppercase', padding: '10px 0', borderBottom: activeTab === 'marketing' ? '2px solid var(--accent-turquoise)' : '2px solid transparent', transition: 'all 0.3s' }}
                                     >
-                                        Marketing
+                                        MARKETING
                                     </button>
                                 </div>
                             </div>
@@ -1255,34 +1553,437 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                             </div>
                         </div>
 
+                        {activeTab === 'insumo' && (
+                            <div style={{ height: '650px', padding: '20px 40px', backgroundColor: '#050505', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 350px', gap: '40px', maxWidth: '1800px', margin: '0 auto', width: '100%', height: '100%' }}>
+
+                                    {/* COLUMNA IZQUIERDA: Altura Fija Bloqueada */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: '15px', minWidth: 0 }}>
+
+                                        {/* HEADER LOCAL: Fila 1 */}
+                                        <div style={{ flexShrink: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+                                                <h2 style={{ margin: 0, color: 'white', letterSpacing: '2px', fontSize: '20px', fontWeight: '300' }}>PUERTA DE <span style={{ color: 'var(--accent-turquoise)', fontWeight: '700' }}>ENTRADA</span></h2>
+                                                <div style={{ display: 'flex', gap: '5px', background: 'rgba(255,255,255,0.03)', padding: '4px', borderRadius: '4px' }}>
+                                                    <button
+                                                        onClick={() => setInsumoSource('local')}
+                                                        style={{ padding: '8px 20px', borderRadius: '4px', border: '1px solid', borderColor: insumoSource === 'local' ? 'var(--accent-turquoise)' : 'rgba(255,255,255,0.05)', backgroundColor: insumoSource === 'local' ? 'rgba(0, 212, 189, 0.1)' : 'transparent', color: insumoSource === 'local' ? 'var(--accent-turquoise)' : '#555', fontSize: '10px', fontWeight: '900', cursor: 'pointer', transition: 'all 0.3s', display: 'flex', alignItems: 'center', gap: '8px' }}
+                                                    >
+                                                        <Cloud size={12} /> LOCAL
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setInsumoSource('drive')}
+                                                        style={{ padding: '8px 20px', borderRadius: '4px', border: '1px solid', borderColor: insumoSource === 'drive' ? 'var(--accent-gold)' : 'rgba(255,255,255,0.05)', backgroundColor: insumoSource === 'drive' ? 'rgba(212,175,55,0.1)' : 'transparent', color: insumoSource === 'drive' ? 'var(--accent-gold)' : '#555', fontSize: '10px', fontWeight: '900', cursor: 'pointer', transition: 'all 0.3s', display: 'flex', alignItems: 'center', gap: '8px' }}
+                                                    >
+                                                        <Star size={12} fill={insumoSource === 'drive' ? 'var(--accent-gold)' : 'none'} />
+                                                        DRIVE ECOMOVING
+                                                    </button>
+                                                </div>
+
+                                                {insumoPreviews.length > 0 && (
+                                                    <button
+                                                        onClick={handleCancelInsumo}
+                                                        style={{
+                                                            padding: '8px 15px',
+                                                            borderRadius: '4px',
+                                                            border: '1px solid rgba(255, 71, 87, 0.3)',
+                                                            backgroundColor: 'rgba(255, 71, 87, 0.1)',
+                                                            color: '#ff4757',
+                                                            fontSize: '10px',
+                                                            fontWeight: '900',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '8px',
+                                                            transition: 'all 0.3s'
+                                                        }}
+                                                        onMouseEnter={(e) => {
+                                                            e.currentTarget.style.backgroundColor = 'rgba(255, 71, 87, 0.2)';
+                                                            e.currentTarget.style.borderColor = 'rgba(255, 71, 87, 0.5)';
+                                                        }}
+                                                        onMouseLeave={(e) => {
+                                                            e.currentTarget.style.backgroundColor = 'rgba(255, 71, 87, 0.1)';
+                                                            e.currentTarget.style.borderColor = 'rgba(255, 71, 87, 0.3)';
+                                                        }}
+                                                    >
+                                                        <X size={12} /> CANCELAR
+                                                    </button>
+                                                )}
+                                            </div>
+                                            {insumoSavingPercentage > 0 && (
+                                                <div style={{ background: 'rgba(0, 212, 189, 0.1)', padding: '8px 15px', borderRadius: '4px', border: '1px solid var(--accent-turquoise)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                    <span style={{ fontSize: '9px', fontWeight: '800', color: 'var(--accent-turquoise)', letterSpacing: '2px' }}>AHORRO:</span>
+                                                    <span style={{ fontSize: '16px', fontWeight: '900', color: 'var(--accent-turquoise)' }}>{insumoSavingPercentage}%</span>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* VISOR FIJO: 380px (Ajuste para visibilidad total de herramientas) */}
+                                        <div style={{
+                                            height: '380px',
+                                            backgroundColor: '#0a0a0a',
+                                            borderRadius: '8px',
+                                            border: '1px solid rgba(255,255,255,0.1)',
+                                            position: 'relative',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            overflow: 'hidden'
+                                        }}>
+                                            {insumoSource === 'local' ? (
+                                                insumoPreviews.length > 0 ? (
+                                                    <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '20px' }}>
+                                                        <img
+                                                            src={insumoPreview || ''}
+                                                            style={{ maxWidth: '80%', maxHeight: '70%', objectFit: 'contain' }}
+                                                        />
+                                                        {insumoPreviews.length > 1 && (
+                                                            <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', padding: '10px', width: '100%', justifyContent: 'flex-start' }} className="custom-scroll">
+                                                                {insumoPreviews.map((p, idx) => (
+                                                                    <img
+                                                                        key={idx}
+                                                                        src={p}
+                                                                        onClick={() => {
+                                                                            setInsumoPreview(p);
+                                                                            setInsumoOptimizedBlob(insumoOptimizedBlobs[idx]);
+                                                                            setInsumoFile(insumoFiles[idx]);
+                                                                        }}
+                                                                        style={{
+                                                                            flexShrink: 0,
+                                                                            width: '50px',
+                                                                            height: '50px',
+                                                                            objectFit: 'cover',
+                                                                            borderRadius: '2px',
+                                                                            border: insumoPreview === p ? '2px solid var(--accent-turquoise)' : '1px solid rgba(255,255,255,0.1)',
+                                                                            cursor: 'pointer'
+                                                                        }}
+                                                                    />
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                        <div style={{ position: 'absolute', top: '20px', right: '20px', background: 'var(--accent-gold)', color: 'black', padding: '5px 12px', borderRadius: '4px', fontSize: '10px', fontWeight: '900', letterSpacing: '1px' }}>
+                                                            {insumoPreviews.length} ARCHIVOS
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div style={{ textAlign: 'center', opacity: 0.2 }}>
+                                                        <label htmlFor="insumo-file" style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }}>
+                                                            <Download size={60} />
+                                                            <span style={{ fontSize: '12px', fontWeight: '800', letterSpacing: '4px' }}>SUBIR ARCHIVOS BRUTOS (MULTIPLE)</span>
+                                                        </label>
+                                                        <input id="insumo-file" type="file" hidden onChange={handleInsumoUpload} accept="image/*" multiple />
+                                                    </div>
+                                                )
+                                            ) : (
+                                                <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', padding: '20px' }}>
+                                                    {driveItems.length > 0 || driveNavigationStack.length > 0 ? (
+                                                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '20px', height: '100%' }}>
+                                                            <div style={{ display: 'flex', gap: '20px', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '15px' }}>
+                                                                <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+                                                                    {driveNavigationStack.length > 0 ? (
+                                                                        <button onClick={handleDriveBack} style={{ background: 'rgba(255,255,255,0.05)', border: 'none', color: 'var(--accent-turquoise)', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer', fontSize: '10px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px' }}>← VOLVER</button>
+                                                                    ) : (
+                                                                        <button onClick={() => setDriveItems([])} style={{ background: 'rgba(255,255,255,0.05)', border: 'none', color: '#999', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer', fontSize: '10px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px' }}>← CAMBIAR CARPETA</button>
+                                                                    )}
+                                                                    <div style={{ display: 'flex', gap: '5px', background: 'rgba(0,0,0,0.3)', padding: '3px', borderRadius: '6px', marginRight: '15px' }}>
+                                                                        <button
+                                                                            onClick={() => { setDriveSource('google'); setDriveItems([]); setDriveNavigationStack([]); }}
+                                                                            style={{ padding: '6px 12px', borderRadius: '4px', border: 'none', cursor: 'pointer', fontSize: '9px', fontWeight: '800', background: driveSource === 'google' ? 'var(--accent-gold)' : 'transparent', color: driveSource === 'google' ? 'black' : '#888' }}
+                                                                        >GOOGLE DRIVE</button>
+                                                                        <button
+                                                                            onClick={() => { setDriveSource('local'); handleDriveFetch(); }}
+                                                                            style={{ padding: '6px 12px', borderRadius: '4px', border: 'none', cursor: 'pointer', fontSize: '9px', fontWeight: '800', background: driveSource === 'local' ? 'var(--accent-gold)' : 'transparent', color: driveSource === 'local' ? 'black' : '#888' }}
+                                                                        >PC LOCAL</button>
+                                                                    </div>
+                                                                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                                        <span style={{ fontSize: '10px', color: driveSource === 'local' ? 'var(--accent-turquoise)' : 'var(--accent-gold)', fontWeight: '900', letterSpacing: '2px' }}>{driveSource === 'local' ? 'LOCAL EXPLORER' : 'GDRIVE EXPLORER'}</span>
+                                                                        <span style={{ fontSize: '9px', color: '#555', fontWeight: '600' }}>{driveItems.length} ELEMENTOS</span>
+                                                                    </div>
+                                                                </div>
+                                                                <button
+                                                                    onClick={() => handleDriveFetch()}
+                                                                    disabled={isFetchingDrive}
+                                                                    style={{ background: 'none', border: '1px solid var(--accent-turquoise)', color: 'var(--accent-turquoise)', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer', fontSize: '10px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px' }}
+                                                                >
+                                                                    {isFetchingDrive ? <RefreshCw className="animate-spin" size={12} /> : <RefreshCw size={12} />}
+                                                                    ACTUALIZAR
+                                                                </button>
+                                                            </div>
+
+                                                            <div key={driveFolderId} style={{ position: 'relative', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '20px', overflowY: 'auto', padding: '10px', minHeight: '200px' }} className="custom-scroll">
+                                                                {isFetchingDrive && (
+                                                                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 5, borderRadius: '8px', backdropFilter: 'blur(2px)' }}>
+                                                                        <Loader2 className="animate-spin" size={30} color="var(--accent-turquoise)" />
+                                                                    </div>
+                                                                )}
+                                                                {driveItems.map((item, idx) => (
+                                                                    <div
+                                                                        key={item.id}
+                                                                        onClick={() => item.type === 'folder' ? handleDriveNavigate(item.id) : handleSelectDriveImage(item.thumbnail!)}
+                                                                        style={{
+                                                                            display: 'flex',
+                                                                            flexDirection: 'column',
+                                                                            gap: '10px',
+                                                                            cursor: 'pointer',
+                                                                            padding: '10px',
+                                                                            borderRadius: '8px',
+                                                                            background: 'rgba(255,255,255,0.02)',
+                                                                            border: '1px solid rgba(255,255,255,0.05)',
+                                                                            transition: 'all 0.3s'
+                                                                        }}
+                                                                        onMouseEnter={(e) => {
+                                                                            e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
+                                                                            e.currentTarget.style.borderColor = item.type === 'folder' ? 'var(--accent-gold)' : 'var(--accent-turquoise)';
+                                                                        }}
+                                                                        onMouseLeave={(e) => {
+                                                                            e.currentTarget.style.background = 'rgba(255,255,255,0.02)';
+                                                                            e.currentTarget.style.borderColor = 'rgba(255,255,255,0.05)';
+                                                                        }}
+                                                                    >
+                                                                        <div style={{ aspectRatio: '1/1', borderRadius: '4px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.2)' }}>
+                                                                            {item.type === 'folder' ? (
+                                                                                <FolderOpen size={40} color="var(--accent-gold)" style={{ opacity: 0.7 }} />
+                                                                            ) : (
+                                                                                <img
+                                                                                    src={driveSource === 'local' ? item.thumbnail! : `/api/drive-proxy?url=${encodeURIComponent(item.thumbnail!)}`}
+                                                                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                                                                    onError={(e) => {
+                                                                                        (e.target as HTMLImageElement).src = 'https://via.placeholder.com/150?text=IMG+ERROR';
+                                                                                    }}
+                                                                                />
+                                                                            )}
+                                                                        </div>
+                                                                        <span style={{
+                                                                            fontSize: '10px',
+                                                                            color: item.type === 'folder' ? 'var(--accent-gold)' : '#ccc',
+                                                                            fontWeight: item.type === 'folder' ? '800' : '500',
+                                                                            textAlign: 'center',
+                                                                            overflow: 'hidden',
+                                                                            textOverflow: 'ellipsis',
+                                                                            whiteSpace: 'nowrap',
+                                                                            display: 'block'
+                                                                        }}>
+                                                                            {item.name}
+                                                                        </span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '30px' }}>
+                                                            <div style={{ width: '80%', maxWidth: '400px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                                                                <label style={{ fontSize: '10px', color: 'var(--accent-gold)', fontWeight: '900', letterSpacing: '2px', textAlign: 'center' }}>ID DE CARPETA GOOGLE DRIVE</label>
+                                                                <div style={{ display: 'flex', gap: '10px' }}>
+                                                                    <input
+                                                                        value={driveFolderId}
+                                                                        onChange={(e) => setDriveFolderId(e.target.value)}
+                                                                        placeholder="Ej: 1a2b3c4d5e6f7g..."
+                                                                        style={{ flex: 1, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.1)', padding: '15px', borderRadius: '4px', color: 'white', fontSize: '14px', outline: 'none' }}
+                                                                    />
+                                                                    <button
+                                                                        onClick={() => handleDriveFetch()}
+                                                                        disabled={isFetchingDrive || !driveFolderId}
+                                                                        style={{ background: 'var(--accent-gold)', color: 'black', border: 'none', padding: '0 20px', borderRadius: '4px', fontWeight: '900', cursor: 'pointer' }}
+                                                                    >
+                                                                        {isFetchingDrive ? <Loader2 className="animate-spin" size={16} /> : <Search size={16} />}
+                                                                    </button>
+                                                                </div>
+                                                                <p style={{ fontSize: '9px', color: '#555', textAlign: 'center', lineHeight: '1.4' }}>
+                                                                    Pega el ID de la carpeta compartida para explorar sus activos directamente.<br />
+                                                                    Asegúrate de que la carpeta sea accesible con el enlace.
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {loading && (
+                                                <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '20px', zIndex: 10 }}>
+                                                    <Loader2 className="animate-spin" size={40} color="var(--accent-turquoise)" />
+                                                    <span style={{ color: 'var(--accent-turquoise)', fontSize: '10px', fontWeight: '800', letterSpacing: '3px' }}>OPTIMIZANDO...</span>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* BARRA DE HERRAMIENTAS: Fila 3 (Anclaje Garantizado) */}
+                                        <div style={{
+                                            flexShrink: 0,
+                                            marginTop: 'auto',
+                                            display: 'flex',
+                                            gap: '15px',
+                                            justifyContent: 'center',
+                                            padding: '10px 0',
+                                            background: 'rgba(255,255,255,0.02)',
+                                            borderRadius: '4px'
+                                        }}>
+                                            <button
+                                                onClick={() => setInsumoTransform(prev => ({ ...prev, rotation: prev.rotation - 90 }))}
+                                                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)', padding: '12px 20px', borderRadius: '4px', cursor: 'pointer', color: 'white', display: 'flex', alignItems: 'center', gap: '10px' }}
+                                            >
+                                                <RotateCw size={16} /> <span style={{ fontSize: '9px', fontWeight: '800' }}>ROTAR</span>
+                                            </button>
+                                            <button
+                                                onClick={() => setInsumoTransform(prev => ({ ...prev, flipX: !prev.flipX }))}
+                                                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)', padding: '12px 20px', borderRadius: '4px', cursor: 'pointer', color: 'white', display: 'flex', alignItems: 'center', gap: '10px' }}
+                                            >
+                                                <FlipHorizontal size={16} /> <span style={{ fontSize: '9px', fontWeight: '800' }}>VOLTEAR</span>
+                                            </button>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'rgba(255,255,255,0.03)', padding: '0 15px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.1)' }}>
+                                                <span style={{ fontSize: '9px', fontWeight: '800', color: '#666' }}>ZOOM:</span>
+                                                <input
+                                                    type="range" min="0.5" max="3" step="0.1"
+                                                    value={insumoTransform.zoom}
+                                                    onChange={(e) => setInsumoTransform(prev => ({ ...prev, zoom: parseFloat(e.target.value) }))}
+                                                    style={{ width: '80px', accentColor: 'var(--accent-turquoise)' }}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* PANEL DE CONTROL RUTEADOR */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '30px', background: 'rgba(255,255,255,0.01)', padding: '30px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.03)', height: '100%' }}>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '11px', color: 'var(--accent-gold)', marginBottom: '15px', fontWeight: '800', letterSpacing: '3px', textTransform: 'uppercase' }}>DESTINO DEL ACTIVO</label>
+                                            <select
+                                                value={insumoDestination}
+                                                onChange={(e) => setInsumoDestination(e.target.value as any)}
+                                                style={{ width: '100%', background: '#000', border: '1px solid #333', padding: '20px', color: 'white', fontSize: '14px', borderRadius: '4px', outline: 'none', appearance: 'none' }}
+                                            >
+                                                <option value="catalog">CATÁLOGO</option>
+                                                <option value="gallery">GRILLA</option>
+                                                <option value="hero">HERO</option>
+                                                <option value="marketing">MARKETING</option>
+                                            </select>
+                                        </div>
+
+                                        {insumoDestination === 'catalog' && (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                                                <label style={{ display: 'block', fontSize: '11px', color: 'var(--accent-gold)', fontWeight: '800', letterSpacing: '3px', textTransform: 'uppercase' }}>TIPO DE ACCIÓN</label>
+                                                <div style={{ display: 'flex', gap: '10px' }}>
+                                                    <button
+                                                        onClick={() => setInsumoCatalogAction('new')}
+                                                        style={{ flex: 1, padding: '15px', background: insumoCatalogAction === 'new' ? 'var(--accent-turquoise)' : 'rgba(255,255,255,0.05)', color: insumoCatalogAction === 'new' ? 'black' : 'white', border: 'none', borderRadius: '4px', fontSize: '10px', fontWeight: '900', letterSpacing: '1px', cursor: 'pointer', transition: 'all 0.3s' }}
+                                                    >
+                                                        NUEVO PRODUCTO
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setInsumoCatalogAction('update')}
+                                                        style={{ flex: 1, padding: '15px', background: insumoCatalogAction === 'update' ? 'var(--accent-turquoise)' : 'rgba(255,255,255,0.05)', color: insumoCatalogAction === 'update' ? 'black' : 'white', border: 'none', borderRadius: '4px', fontSize: '10px', fontWeight: '900', letterSpacing: '1px', cursor: 'pointer', transition: 'all 0.3s' }}
+                                                    >
+                                                        ACTUALIZAR PRODUCTO
+                                                    </button>
+                                                </div>
+                                                {insumoCatalogAction === 'update' && (
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', padding: '15px', background: 'rgba(212, 175, 55, 0.05)', border: '1px solid rgba(212, 175, 55, 0.2)', borderRadius: '4px' }}>
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                            <label style={{ fontSize: '9px', color: 'rgba(255,255,255,0.4)', fontWeight: '800', letterSpacing: '1px' }}>BUSCAR PRODUCTO PARA ACTUALIZAR:</label>
+                                                            <div style={{ position: 'relative' }}>
+                                                                <input
+                                                                    type="text"
+                                                                    placeholder="Nombre o SKU..."
+                                                                    value={insumoProductSearch}
+                                                                    onChange={(e) => setInsumoProductSearch(e.target.value)}
+                                                                    style={{ width: '100%', background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.1)', padding: '10px 12px', borderRadius: '4px', color: 'white', fontSize: '11px', outline: 'none' }}
+                                                                />
+                                                                {insumoSearchResults.length > 0 && (
+                                                                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#111', border: '1px solid #333', borderRadius: '4px', zIndex: 100, marginTop: '5px', boxShadow: '0 10px 30px rgba(0,0,0,0.8)' }}>
+                                                                        {insumoSearchResults.map(p => (
+                                                                            <div
+                                                                                key={p.id}
+                                                                                onClick={() => {
+                                                                                    setSelectedProduct(p);
+                                                                                    setCatalogViewerImage(p.images[0]);
+                                                                                    setInsumoProductSearch('');
+                                                                                    setInsumoSearchResults([]);
+                                                                                }}
+                                                                                style={{ padding: '10px 15px', borderBottom: '1px solid rgba(255,255,255,0.05)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                                                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'}
+                                                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                                                            >
+                                                                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                                                    <span style={{ fontSize: '11px', color: 'white', fontWeight: '700' }}>{p.nombre}</span>
+                                                                                    <span style={{ fontSize: '9px', color: '#666' }}>{p.sku_externo}</span>
+                                                                                </div>
+                                                                                {updatedProductIds.has(p.id) && <Check size={12} color="var(--accent-turquoise)" />}
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '5px', padding: '10px', background: 'rgba(0,0,0,0.2)', borderRadius: '2px' }}>
+                                                            <span style={{ fontSize: '9px', color: 'var(--accent-gold)', fontWeight: '800', letterSpacing: '1px', textTransform: 'uppercase' }}>OBJETIVO: </span>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                <span style={{ fontSize: '11px', color: 'white', fontWeight: '700' }}>
+                                                                    {selectedProduct ? selectedProduct.nombre : 'NINGUNO'}
+                                                                </span>
+                                                                {selectedProduct && updatedProductIds.has(selectedProduct.id) && (
+                                                                    <div style={{ background: 'var(--accent-turquoise)', borderRadius: '50%', width: '14px', height: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                                        <Check size={8} color="black" />
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        <div style={{ marginTop: '10px', display: 'flex', gap: '10px' }}>
+                                                            <button
+                                                                onClick={() => setInsumoUpdateMode('append')}
+                                                                style={{ flex: 1, padding: '12px 8px', fontSize: '9px', fontWeight: '800', borderRadius: '2px', border: '1px solid', borderColor: insumoUpdateMode === 'append' ? 'var(--accent-gold)' : '#333', background: insumoUpdateMode === 'append' ? 'rgba(212, 175, 55, 0.1)' : 'rgba(0,0,0,0.5)', color: insumoUpdateMode === 'append' ? 'var(--accent-gold)' : '#666', cursor: 'pointer', transition: 'all 0.3s' }}
+                                                            >
+                                                                AÑADIR A GALERÍA
+                                                            </button>
+                                                            <button
+                                                                onClick={() => setInsumoUpdateMode('replace')}
+                                                                style={{ flex: 1, padding: '12px 8px', fontSize: '9px', fontWeight: '800', borderRadius: '2px', border: '1px solid', borderColor: insumoUpdateMode === 'replace' ? '#ef4444' : '#333', background: insumoUpdateMode === 'replace' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(0,0,0,0.5)', color: insumoUpdateMode === 'replace' ? '#ef4444' : '#666', cursor: 'pointer', transition: 'all 0.3s' }}
+                                                            >
+                                                                REEMPLAZAR TODO
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        <button
+                                            onClick={handleInsumoSend}
+                                            disabled={!insumoPreview || isRoutingInsumo}
+                                            style={{
+                                                marginTop: 'auto',
+                                                background: !insumoPreview ? '#222' : 'var(--accent-turquoise)',
+                                                color: 'black',
+                                                padding: '25px',
+                                                borderRadius: '4px',
+                                                border: 'none',
+                                                fontSize: '14px',
+                                                fontWeight: '900',
+                                                letterSpacing: '3px',
+                                                cursor: !insumoPreview ? 'not-allowed' : 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                gap: '15px',
+                                                transition: 'all 0.3s'
+                                            }}
+                                        >
+                                            {isRoutingInsumo ? <Loader2 className="animate-spin" size={20} /> : <Send size={20} />}
+                                            ENVIAR ACTIVO
+                                        </button>
+
+                                        <div style={{ padding: '20px', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '4px', background: 'rgba(0,0,0,0.3)' }}>
+                                            <p style={{ fontSize: '10px', color: '#444', lineHeight: '1.6', margin: 0 }}>
+                                                Al pulsar <strong style={{ color: '#666' }}>ENVIAR</strong>, el sistema guardará la imagen optimizada en la carpeta correspondiente de Supabase y te redirigirá a la pestaña seleccionada para completar la configuración.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         {activeTab === 'catalog' && (
                             <div style={{ display: 'flex', flexDirection: 'column' }}>
                                 <div style={{ padding: '0 60px 18px 60px', backgroundColor: 'rgba(0,0,0,0.2)', display: 'flex', gap: '40px', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-                                    <div style={{ display: 'flex', gap: '12px' }}>
-                                        {wholesalers.map(w => (
-                                            <button
-                                                key={w}
-                                                onClick={() => setSelectedWholesaler(w)}
-                                                style={{
-                                                    padding: '12px 28px',
-                                                    borderRadius: '2px',
-                                                    border: '1px solid',
-                                                    borderColor: selectedWholesaler === w ? 'var(--accent-turquoise)' : 'rgba(255,255,255,0.05)',
-                                                    backgroundColor: selectedWholesaler === w ? 'rgba(0, 212, 189, 0.05)' : 'transparent',
-                                                    color: selectedWholesaler === w ? 'var(--accent-turquoise)' : '#888',
-                                                    fontSize: '14px',
-                                                    fontWeight: '600',
-                                                    cursor: 'pointer',
-                                                    transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-                                                    textTransform: 'uppercase',
-                                                    letterSpacing: '2px',
-                                                    fontFamily: 'var(--font-body)'
-                                                }}
-                                            >
-                                                {w}
-                                            </button>
-                                        ))}
-                                    </div>
+
                                     <div style={{ flex: 1, position: 'relative' }}>
                                         <Search style={{ position: 'absolute', left: '25px', top: '50%', transform: 'translateY(-50%)', width: '20px', height: '20px', color: '#444' }} />
                                         <input
@@ -1297,346 +1998,12 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                             </div>
                         )}
 
-                        <div style={{ flex: 1, display: 'grid', gridTemplateColumns: activeTab === 'catalog' ? '380px 1fr' : activeTab === 'gallery' ? '300px 1fr' : activeTab === 'insumo' ? '1fr' : '1fr', overflow: 'hidden' }}>
-                            {activeTab === 'insumo' && (
-                                <div className="custom-scroll" style={{ padding: "60px", overflowY: "auto", backgroundColor: "#050505", gridColumn: "1 / -1" }}>
-                                    <div style={{ maxWidth: "1200px", margin: "0 auto" }}>
-                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "40px" }}>
-                                            <h2 style={{ color: "white", fontFamily: "var(--font-heading)", fontSize: "32px", margin: 0, letterSpacing: "4px", textTransform: "uppercase" }}>
-                                                LABORATORIO DE <span style={{ color: "var(--accent-gold)" }}>INSUMO</span>
-                                            </h2>
-                                            <p style={{ color: "#444", fontSize: "12px", fontWeight: "700", letterSpacing: "2px" }}>PUERTA DE ENTRADA PREMIUM</p>
-                                        </div>
+                        <div style={{ flex: 1, display: 'grid', gridTemplateColumns: activeTab === 'gallery' ? '300px 1fr' : '1fr', overflow: 'hidden' }}>
 
-                                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "60px" }}>
-                                            {/* Panel de Carga y PrevisualizaciÍn */}
-                                            <div style={{ display: "flex", flexDirection: "column", gap: "30px" }}>
-                                                <div
-                                                    onMouseDown={(e) => {
-                                                        if (!insumoMetadata?.optimizedUrl) return;
-                                                        setIsDraggingInsumo(true);
-                                                        setDragStart({ x: e.clientX, y: e.clientY });
-                                                    }}
-                                                    onMouseMove={(e) => {
-                                                        if (!isDraggingInsumo) return;
-                                                        const dx = e.clientX - dragStart.x;
-                                                        const dy = e.clientY - dragStart.y;
-                                                        setInsumoTransform(prev => ({
-                                                            ...prev,
-                                                            offsetX: prev.offsetX + dx,
-                                                            offsetY: prev.offsetY + dy
-                                                        }));
-                                                        setDragStart({ x: e.clientX, y: e.clientY });
-                                                    }}
-                                                    onMouseUp={() => setIsDraggingInsumo(false)}
-                                                    onMouseLeave={() => setIsDraggingInsumo(false)}
-                                                    style={{
-                                                        width: "100%",
-                                                        aspectRatio: "16/9",
-                                                        background: "#000",
-                                                        border: "2px dashed rgba(255,255,255,0.05)",
-                                                        borderRadius: "8px",
-                                                        display: "flex",
-                                                        flexDirection: "column",
-                                                        alignItems: "center",
-                                                        justifyContent: "center",
-                                                        position: "relative",
-                                                        overflow: "hidden",
-                                                        cursor: insumoMetadata?.optimizedUrl ? (isDraggingInsumo ? "grabbing" : "grab") : "default"
-                                                    }}
-                                                >
-                                                    {insumoMetadata?.optimizedUrl ? (
-                                                        <React.Fragment>
-                                                            <img src={insumoMetadata.optimizedUrl} style={{ width: "100%", height: "100%", objectFit: "contain", pointerEvents: "none" }} alt="Insumo" />
-                                                            <div style={{ position: "absolute", bottom: "10px", right: "10px", background: "rgba(0,0,0,0.5)", padding: "4px 10px", borderRadius: "100px", fontSize: "10px", color: "var(--accent-turquoise)", fontWeight: "800", pointerEvents: "none" }}>
-                                                                PO: {insumoTransform.offsetX.toFixed(0)}x | {insumoTransform.offsetY.toFixed(0)}y
-                                                            </div>
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setInsumoMetadata(null);
-                                                                    setInsumoFile(null);
-                                                                }}
-                                                                title="Eliminar imagen actual"
-                                                                style={{ position: 'absolute', top: '10px', right: '10px', background: 'rgba(239, 68, 68, 0.9)', color: 'white', border: 'none', borderRadius: '50%', width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 20 }}
-                                                            >
-                                                                <X size={14} />
-                                                            </button>
-                                                        </React.Fragment>
-                                                    ) : (
-                                                        <>
-                                                            <ImageIcon size={60} style={{ marginBottom: "20px", opacity: 0.2 }} />
-                                                            <p style={{ fontSize: "10px", color: "#444", fontWeight: "800", letterSpacing: "2px" }}>ARRASTRA O SELECCIONA IMAGEN CRUDA</p>
-                                                        </>
-                                                    )}
-
-                                                    {isProcessingInsumo && (
-                                                        <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.8)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "15px" }}>
-                                                            <RefreshCw className="animate-spin" size={30} color="var(--accent-turquoise)" />
-                                                            <span style={{ color: "var(--accent-turquoise)", fontSize: "10px", fontWeight: "900", letterSpacing: "2px" }}>OPTIMIZANDO...</span>
-                                                        </div>
-                                                    )}
-                                                    {!insumoMetadata?.optimizedUrl && (
-                                                        <input
-                                                            type="file"
-                                                            accept="image/*"
-                                                            onChange={handleInsumoUpload}
-                                                            style={{ position: "absolute", inset: 0, opacity: 0, cursor: "pointer" }}
-                                                        />
-                                                    )}
-                                                </div>
-
-                                                <div style={{ display: "flex", gap: "10px" }}>
-                                                    <button
-                                                        onClick={() => setInsumoTarget('web')}
-                                                        style={{ flex: 1, padding: "15px", borderRadius: "4px", border: "1px solid", borderColor: insumoTarget === 'web' ? 'var(--accent-turquoise)' : '#222', background: insumoTarget === 'web' ? 'rgba(0,212,189,0.1)' : 'transparent', color: insumoTarget === 'web' ? 'var(--accent-turquoise)' : '#444', fontSize: "10px", fontWeight: "900", cursor: "pointer", letterSpacing: "1px" }}
-                                                    >
-                                                        TARGET: WEB / CATÁLOGO
-                                                    </button>
-                                                    <button
-                                                        onClick={() => setInsumoTarget('email')}
-                                                        style={{ flex: 1, padding: "15px", borderRadius: "4px", border: "1px solid", borderColor: insumoTarget === 'email' ? 'var(--accent-turquoise)' : '#222', background: insumoTarget === 'email' ? 'rgba(0,212,189,0.1)' : 'transparent', color: insumoTarget === 'email' ? 'var(--accent-turquoise)' : '#444', fontSize: "10px", fontWeight: "900", cursor: "pointer", letterSpacing: "1px" }}
-                                                    >
-                                                        TARGET: CORREO / MARKETING
-                                                    </button>
-                                                </div>
-
-                                                {/* Panel de TransformaciÍn Experta */}
-                                                <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "8px", padding: "20px" }}>
-                                                    <h3 style={{ color: "var(--accent-gold)", fontSize: "10px", fontWeight: "900", letterSpacing: "2px", marginBottom: "20px", textTransform: "uppercase" }}>TRANSFORMACIÍN EXPERTA</h3>
-
-                                                    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-                                                        {/* Aspect Ratio Row */}
-                                                        <div>
-                                                            <p style={{ fontSize: "9px", color: "#444", fontWeight: "800", marginBottom: "10px", letterSpacing: "1px" }}>FORMATO / ASPECT RATIO</p>
-                                                            <div style={{ display: "flex", gap: "8px" }}>
-                                                                {[
-                                                                    { id: 'original', icon: <ImageIcon size={14} />, label: 'ORIG' },
-                                                                    { id: '1:1', icon: <Square size={14} />, label: '1:1' },
-                                                                    { id: '16:9', icon: <RectangleHorizontal size={14} />, label: '16:9' },
-                                                                    { id: '9:16', icon: <RectangleVertical size={14} />, label: '9:16' }
-                                                                ].map(ratio => (
-                                                                    <button
-                                                                        key={ratio.id}
-                                                                        onClick={() => setInsumoTransform(prev => ({ ...prev, aspectRatio: ratio.id as any }))}
-                                                                        style={{ flex: 1, padding: "10px", background: insumoTransform.aspectRatio === ratio.id ? "rgba(0,212,189,0.1)" : "transparent", border: "1px solid", borderColor: insumoTransform.aspectRatio === ratio.id ? "var(--accent-turquoise)" : "rgba(255,255,255,0.1)", borderRadius: "4px", color: insumoTransform.aspectRatio === ratio.id ? "var(--accent-turquoise)" : "#666", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: "5px" }}
-                                                                    >
-                                                                        {ratio.icon}
-                                                                        <span style={{ fontSize: "8px", fontWeight: "900" }}>{ratio.label}</span>
-                                                                    </button>
-                                                                ))}
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Zoom & Rotation Controls */}
-                                                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
-                                                            <div>
-                                                                <p style={{ fontSize: "9px", color: "#444", fontWeight: "800", marginBottom: "10px", letterSpacing: "1px" }}>ZOOM DINíMICO</p>
-                                                                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                                                                    <button onClick={() => setInsumoTransform(prev => ({ ...prev, zoom: Math.max(0.1, prev.zoom - 0.1) }))} style={{ padding: "8px", background: "none", border: "1px solid rgba(255,255,255,0.1)", color: "#888", borderRadius: "4px", cursor: "pointer" }}><Minimize2 size={14} /></button>
-                                                                    <span style={{ fontSize: "11px", color: "white", fontWeight: "700", minWidth: "40px", textAlign: "center" }}>{(insumoTransform.zoom * 100).toFixed(0)}%</span>
-                                                                    <button onClick={() => setInsumoTransform(prev => ({ ...prev, zoom: prev.zoom + 0.1 }))} style={{ padding: "8px", background: "none", border: "1px solid rgba(255,255,255,0.1)", color: "#888", borderRadius: "4px", cursor: "pointer" }}><Maximize2 size={14} /></button>
-                                                                </div>
-                                                            </div>
-                                                            <div>
-                                                                <p style={{ fontSize: "9px", color: "#444", fontWeight: "800", marginBottom: "10px", letterSpacing: "1px" }}>ROTACIíN</p>
-                                                                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                                                                    <button onClick={() => setInsumoTransform(prev => ({ ...prev, rotation: (prev.rotation - 90) % 360 }))} style={{ padding: "8px", background: "none", border: "1px solid rgba(255,255,255,0.1)", color: "#888", borderRadius: "4px", cursor: "pointer" }}><RotateCw size={14} style={{ transform: "scaleX(-1)" }} /></button>
-                                                                    <span style={{ fontSize: "11px", color: "white", fontWeight: "700", minWidth: "40px", textAlign: "center" }}>{insumoTransform.rotation}Í</span>
-                                                                    <button onClick={() => setInsumoTransform(prev => ({ ...prev, rotation: (prev.rotation + 90) % 360 }))} style={{ padding: "8px", background: "none", border: "1px solid rgba(255,255,255,0.1)", color: "#888", borderRadius: "4px", cursor: "pointer" }}><RotateCw size={14} /></button>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Mirror & Reset */}
-                                                        <div style={{ display: "flex", gap: "10px" }}>
-                                                            <button
-                                                                onClick={() => setInsumoTransform(prev => ({ ...prev, flipX: !prev.flipX }))}
-                                                                style={{ flex: 1, padding: "12px", background: insumoTransform.flipX ? "rgba(0,212,189,0.1)" : "transparent", border: "1px solid", borderColor: insumoTransform.flipX ? "var(--accent-turquoise)" : "rgba(255,255,255,0.1)", borderRadius: "4px", color: insumoTransform.flipX ? "var(--accent-turquoise)" : "#888", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", fontSize: "9px", fontWeight: "900", letterSpacing: "1px" }}
-                                                            >
-                                                                <FlipHorizontal size={14} /> ESPEJAR (FLIP X)
-                                                            </button>
-                                                            <button
-                                                                onClick={() => setInsumoTransform({ zoom: 1, rotation: 0, flipX: false, aspectRatio: 'original', offsetX: 0, offsetY: 0 })}
-                                                                style={{ padding: "12px", background: "none", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "4px", color: "#444", cursor: "pointer" }}
-                                                                title="Resetear Transformaciones"
-                                                            >
-                                                                <RefreshCw size={14} />
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* Panel de MÍtricas y Enrutamiento */}
-                                            <div style={{ display: "flex", flexDirection: "column", gap: "40px" }}>
-                                                <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "8px", padding: "30px" }}>
-                                                    <h3 style={{ color: "var(--accent-gold)", fontSize: "11px", fontWeight: "900", letterSpacing: "3px", marginBottom: "30px", textTransform: "uppercase" }}>MÍTRICA DE RENDIMIENTO</h3>
-
-                                                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "40px" }}>
-                                                        <div>
-                                                            <p style={{ fontSize: "9px", color: "#555", fontWeight: "800", marginBottom: "10px", letterSpacing: "1px" }}>PARÍMETRO DE ENTRADA</p>
-                                                            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                                                                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                                                                    <span style={{ fontSize: "12px", color: "#888" }}>TamaÍo:</span>
-                                                                    <span style={{ fontSize: "12px", color: "white", fontWeight: "700" }}>{insumoMetadata ? (insumoMetadata.originalSize / 1024).toFixed(1) + " KB" : "-"}</span>
-                                                                </div>
-                                                                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                                                                    <span style={{ fontSize: "12px", color: "#888" }}>Format:</span>
-                                                                    <span style={{ fontSize: "12px", color: "white", fontWeight: "700" }}>{insumoFile ? insumoFile.type.split('/')[1].toUpperCase() : "-"}</span>
-                                                                </div>
-                                                                <div style={{ display: "flex", flexDirection: "column", gap: "2px", borderTop: "1px solid rgba(255,255,255,0.05)", paddingTop: "8px" }}>
-                                                                    <span style={{ fontSize: "9px", color: "#444", fontWeight: "800", textTransform: "uppercase" }}>Archivo Entrada:</span>
-                                                                    <span style={{ fontSize: "10px", color: "#aaa", fontWeight: "700", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={insumoFile?.name}>
-                                                                        {insumoFile ? insumoFile.name : "-"}
-                                                                    </span>
-                                                                </div>
-                                                                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                                                                    <span style={{ fontSize: "12px", color: "#888" }}>Res:</span>
-                                                                    <span style={{ fontSize: "12px", color: "white", fontWeight: "700" }}>{insumoMetadata ? `${insumoMetadata.originalWidth}x${insumoMetadata.originalHeight}` : "-"}</span>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-
-                                                        <div>
-                                                            <p style={{ fontSize: "9px", color: "#555", fontWeight: "800", marginBottom: "10px", letterSpacing: "1px" }}>PARÍMETRO DE SALIDA (OPT.)</p>
-                                                            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                                                                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                                                                    <span style={{ fontSize: "12px", color: "#888" }}>TamaÍo:</span>
-                                                                    <span style={{ fontSize: "12px", color: "var(--accent-turquoise)", fontWeight: "900" }}>{insumoMetadata ? (insumoMetadata.optimizedSize / 1024).toFixed(1) + " KB" : "-"}</span>
-                                                                </div>
-                                                                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                                                                    <span style={{ fontSize: "12px", color: "#888" }}>Format:</span>
-                                                                    <span style={{ fontSize: "12px", color: "var(--accent-turquoise)", fontWeight: "900" }}>WEBP</span>
-                                                                </div>
-                                                                <div style={{ display: "flex", flexDirection: "column", gap: "2px", borderTop: "1px solid rgba(0,212,189,0.1)", paddingTop: "8px", position: 'relative' }}>
-                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                                        <span style={{ fontSize: "9px", color: "var(--accent-turquoise)", fontWeight: "900", textTransform: "uppercase" }}>Nombre SEO (AI):</span>
-                                                                        <button
-                                                                            onClick={handleGenerateInsumoAIFileName}
-                                                                            disabled={isProcessingInsumo}
-                                                                            style={{ background: 'none', border: 'none', color: 'var(--accent-gold)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '9px', fontWeight: '800' }}
-                                                                        >
-                                                                            <Sparkles size={10} /> IA MAGIC
-                                                                        </button>
-                                                                    </div>
-                                                                    <span style={{ fontSize: "10px", color: insumoAISEOFilename ? "var(--accent-gold)" : "var(--accent-turquoise)", fontWeight: "700", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                                                        {insumoAISEOFilename ? (insumoAISEOFilename + ".webp") : (insumoFile ? slugifyForSEO(insumoFile.name.split('.')[0]) : "-")}
-                                                                    </span>
-                                                                </div>
-                                                                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                                                                    <span style={{ fontSize: "12px", color: "#888" }}>Res:</span>
-                                                                    <span style={{ fontSize: "12px", color: "var(--accent-turquoise)", fontWeight: "900" }}>{insumoMetadata ? `${insumoMetadata.optimizedWidth}x${insumoMetadata.optimizedHeight}` : "-"}</span>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    {insumoMetadata && (
-                                                        <div style={{ marginTop: "20px", padding: "12px", background: "rgba(0,212,189,0.03)", border: "1px solid rgba(0,212,189,0.1)", borderRadius: "4px", textAlign: "center" }}>
-                                                            <span style={{ color: "var(--accent-turquoise)", fontSize: "12px", fontWeight: "900", letterSpacing: "1px" }}>
-                                                                AHORRO DE PESO: {(((insumoMetadata.originalSize - insumoMetadata.optimizedSize) / insumoMetadata.originalSize) * 100).toFixed(1)}%
-                                                            </span>
-                                                        </div>
-                                                    )}
-                                                </div>
-
-                                                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                                                    <button
-                                                        disabled={!insumoMetadata?.optimizedUrl}
-                                                        onClick={() => handleRouteInsumo('catalog')}
-                                                        style={{ padding: "12px", background: "white", color: "black", border: "none", borderRadius: "4px", fontSize: "10px", fontWeight: "900", letterSpacing: "1px", cursor: insumoMetadata?.optimizedUrl ? "pointer" : "not-allowed", opacity: insumoMetadata?.optimizedUrl ? 1 : 0.3 }}
-                                                    >
-                                                        ENVIAR A CATÁLOGO
-                                                    </button>
-                                                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px" }}>
-                                                        <button
-                                                            disabled={!insumoMetadata?.optimizedUrl}
-                                                            onClick={() => handleRouteInsumo('hero')}
-                                                            style={{ padding: "12px", background: "rgba(255,255,255,0.05)", color: "white", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "4px", fontSize: "10px", fontWeight: "900", letterSpacing: "1px", cursor: insumoMetadata?.optimizedUrl ? "pointer" : "not-allowed", opacity: insumoMetadata?.optimizedUrl ? 1 : 0.3 }}
-                                                        >
-                                                            USAR EN HERO
-                                                        </button>
-                                                        <button
-                                                            disabled={!insumoMetadata?.optimizedUrl}
-                                                            onClick={() => handleRouteInsumo('gallery')}
-                                                            style={{ padding: "12px", background: "rgba(255,255,255,0.05)", color: "white", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "4px", fontSize: "10px", fontWeight: "900", letterSpacing: "1px", cursor: insumoMetadata?.optimizedUrl ? "pointer" : "not-allowed", opacity: insumoMetadata?.optimizedUrl ? 1 : 0.3 }}
-                                                        >
-                                                            A GALERÍA
-                                                        </button>
-                                                        <button
-                                                            disabled={!insumoMetadata?.optimizedUrl}
-                                                            onClick={() => handleRouteInsumo('marketing')}
-                                                            style={{ padding: "12px", background: "rgba(255,255,255,0.05)", color: "white", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "4px", fontSize: "10px", fontWeight: "900", letterSpacing: "1px", cursor: insumoMetadata?.optimizedUrl ? "pointer" : "not-allowed", opacity: insumoMetadata?.optimizedUrl ? 1 : 0.3 }}
-                                                        >
-                                                            A MARKETING
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
 
                             {activeTab === 'catalog' && (
                                 <React.Fragment>
-                                    {/* Left List */}
-                                    <div className="custom-scroll" style={{ borderRight: '1px solid rgba(255,255,255,0.05)', overflowY: 'auto', padding: '32px 40px', backgroundColor: 'rgba(0,0,0,0.2)' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
-                                            <p style={{ fontSize: '11px', color: 'var(--accent-gold)', fontWeight: '800', textTransform: 'uppercase', margin: 0, letterSpacing: '3px', fontFamily: 'var(--font-body)' }}>
-                                                {loading ? 'Cargando buffer...' : `Nuevos Descubrimientos (${filteredProducts.length})`}
-                                            </p>
-                                            <button
-                                                onClick={handleOpenNew}
-                                                style={{ background: 'var(--accent-turquoise)', border: 'none', color: 'black', padding: '10px 20px', borderRadius: '4px', fontSize: '11px', fontWeight: '800', cursor: 'pointer', letterSpacing: '1px' }}
-                                            >
-                                                + NUEVO
-                                            </button>
-                                        </div>
 
-                                        {loading ? (
-                                            <div style={{ display: 'flex', justifyContent: 'center', padding: '40px' }}>
-                                                <Loader2 className="animate-spin" color="var(--accent-turquoise)" size={35} />
-                                            </div>
-                                        ) : filteredProducts.map(p => (
-                                            <motion.div
-                                                key={p.id}
-                                                onClick={() => {
-                                                    handleProductSelect(p);
-                                                    setIsAddingNew(false);
-                                                }}
-                                                whileHover={{ scale: 1.02, x: 5 }}
-                                                style={{
-                                                    padding: '20px',
-                                                    backgroundColor: selectedProduct?.id === p.id ? 'rgba(0, 212, 189, 0.05)' : 'rgba(255, 255, 255, 0.01)',
-                                                    borderRadius: '4px',
-                                                    border: '1px solid',
-                                                    borderColor: selectedProduct?.id === p.id ? 'var(--accent-turquoise)' : 'rgba(255, 255, 255, 0.03)',
-                                                    cursor: 'pointer',
-                                                    marginBottom: '20px',
-                                                    display: 'flex',
-                                                    gap: '20px',
-                                                    alignItems: 'center',
-                                                    transition: 'all 0.3s'
-                                                }}
-                                            >
-                                                <div style={{ position: 'relative', width: '80px', height: '80px', borderRadius: '50%', overflow: 'hidden', backgroundColor: 'black', border: '1px solid rgba(255,255,255,0.05)' }}>
-                                                    <img src={p.images[0]} style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.8 }} />
-                                                </div>
-                                                <div style={{ flex: 1 }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                                                        <span style={{ fontSize: '10px', color: 'var(--accent-gold)', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '2px' }}>{p.wholesaler}</span>
-                                                        <span style={{ color: '#333' }}>Í</span>
-                                                        <span style={{ fontSize: '10px', color: '#555', fontWeight: '500' }}>{p.external_id}</span>
-                                                    </div>
-                                                    <p style={{ margin: 0, fontSize: '17px', fontWeight: '600', color: 'white', letterSpacing: '0.5px', fontFamily: 'var(--font-heading)', textTransform: 'uppercase' }}>{p.name}</p>
-                                                </div>
-                                            </motion.div>
-                                        ))}
-                                    </div>
 
                                     {/* Right Detail */}
                                     <div className="custom-scroll" style={{ padding: '30px 60px', overflowY: 'auto', backgroundColor: '#050505' }}>
@@ -1644,14 +2011,14 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                                             <div style={{ display: 'flex', flexDirection: 'column', height: '100%', maxWidth: '1600px', margin: '0 auto', width: '100%' }}>
                                                 <div style={{ height: '20px' }} /> {/* Spacer */}
 
-                                                <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', gap: '50px', flex: 1 }}>
+                                                <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr 1fr', gap: '60px', flex: 1 }}>
                                                     {/* Columna Izquierda: Visual y Biblioteca (Reducida) */}
                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
                                                         {/* Hero Viewer Principal */}
                                                         <div>
                                                             <div style={{
                                                                 width: '100%',
-                                                                aspectRatio: '1/1',
+                                                                height: '35vh',
                                                                 backgroundColor: '#000',
                                                                 borderRadius: '2px',
                                                                 display: 'flex',
@@ -1672,7 +2039,7 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                                                                     />
                                                                 ) : (
                                                                     <div style={{ textAlign: 'center', opacity: 0.1 }}>
-                                                                        <ImageIcon size={120} color="white" />
+                                                                        <ImageIcon size={60} color="white" />
                                                                     </div>
                                                                 )}
 
@@ -1692,6 +2059,32 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                                                                 <div style={{ display: 'flex', gap: '15px' }}>
                                                                     <button
                                                                         onClick={() => {
+                                                                            const input = document.createElement('input');
+                                                                            input.type = 'file';
+                                                                            input.multiple = true;
+                                                                            input.accept = 'image/*';
+                                                                            input.onchange = (e: any) => {
+                                                                                const files = e.target.files;
+                                                                                if (!files) return;
+                                                                                const newImages = [...(newProductForm.images || [])];
+                                                                                const newPendingFiles = { ...pendingFiles };
+                                                                                for (const file of files) {
+                                                                                    const url = URL.createObjectURL(file);
+                                                                                    newImages.push(url);
+                                                                                    newPendingFiles[url] = file;
+                                                                                }
+                                                                                setNewProductForm({ ...newProductForm, images: newImages });
+                                                                                setPendingFiles(newPendingFiles);
+                                                                                if (!activeManualImage && newImages.length > 0) setActiveManualImage(newImages[0]);
+                                                                            };
+                                                                            input.click();
+                                                                        }}
+                                                                        style={{ background: 'none', border: 'none', color: 'var(--accent-turquoise)', fontSize: '10px', fontWeight: '800', cursor: 'pointer', letterSpacing: '1px' }}
+                                                                    >
+                                                                        + LOCAL
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => {
                                                                             const url = prompt('Ingresa la URL de la imagen:');
                                                                             if (url) {
                                                                                 const currentImages = newProductForm.images || [];
@@ -1708,7 +2101,7 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                                                             </div>
 
                                                             {newProductForm.images && newProductForm.images.length > 0 && (
-                                                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(20, 1fr)', gap: '6px', maxHeight: '300px', overflowY: 'auto', padding: '10px', background: 'rgba(255,255,255,0.01)', borderRadius: '2px', border: '1px solid rgba(255,255,255,0.03)' }} className="custom-scroll">
+                                                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px', maxHeight: '300px', overflowY: 'auto', padding: '10px', background: 'rgba(255,255,255,0.01)', borderRadius: '2px', border: '1px solid rgba(255,255,255,0.03)' }} className="custom-scroll">
                                                                     {newProductForm.images.map((img, i) => (
                                                                         <div
                                                                             key={i}
@@ -1783,8 +2176,8 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                                                                 <label style={{ display: 'block', fontSize: '11px', color: 'var(--accent-gold)', marginBottom: '10px', fontWeight: '800', letterSpacing: '3px', textTransform: 'uppercase' }}>CÓDIGO / SKU</label>
                                                                 <input
                                                                     type="text"
-                                                                    value={newProductForm.external_id}
-                                                                    onChange={(e) => setNewProductForm({ ...newProductForm, external_id: e.target.value })}
+                                                                    value={newProductForm.sku_externo}
+                                                                    onChange={(e) => setNewProductForm({ ...newProductForm, sku_externo: e.target.value })}
                                                                     style={{ width: '100%', backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '2px', padding: '15px', color: 'white', fontSize: '15px', outline: 'none' }}
                                                                 />
                                                             </div>
@@ -1793,9 +2186,8 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                                                     {/* Lista de Categorías Predefinidas */}
                                                                     <div style={{ position: 'relative', marginBottom: '8px' }}>
-                                                                        <select
-                                                                            value={newProductForm.category || ''}
-                                                                            onChange={(e) => setNewProductForm({ ...newProductForm, category: e.target.value })}
+                                                                        <div
+                                                                            onClick={() => setIsCategoryDropdownOpen(!isCategoryDropdownOpen)}
                                                                             style={{
                                                                                 width: '100%',
                                                                                 padding: '16px 15px',
@@ -1808,20 +2200,46 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                                                                                 outline: 'none',
                                                                                 textTransform: 'uppercase',
                                                                                 cursor: 'pointer',
-                                                                                appearance: 'none', // Remove default arrow to style validly if desired, or keep it
-                                                                                height: '48px'
+                                                                                height: '48px',
+                                                                                display: 'flex',
+                                                                                justifyContent: 'space-between',
+                                                                                alignItems: 'center',
+                                                                                transition: 'border-color 0.3s'
                                                                             }}
+                                                                            onMouseEnter={(e) => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'}
+                                                                            onMouseLeave={(e) => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.05)'}
                                                                         >
-                                                                            <option value="" disabled>SELECCIONAR CATEGORÍA...</option>
-                                                                            {customCategories.map(cat => (
-                                                                                <option key={cat} value={cat} style={{ color: 'black' }}>
-                                                                                    {cat}
-                                                                                </option>
-                                                                            ))}
-                                                                        </select>
-                                                                        <div style={{ position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--accent-turquoise)' }}>
-                                                                            <ChevronRight size={14} style={{ transform: 'rotate(90deg)' }} />
+                                                                            <span>{newProductForm.category || 'SELECCIONAR CATEGORÍA...'}</span>
+                                                                            <ChevronRight size={14} style={{ transform: isCategoryDropdownOpen ? 'rotate(-90deg)' : 'rotate(90deg)', transition: 'transform 0.2s', color: 'var(--accent-turquoise)' }} />
                                                                         </div>
+                                                                        {isCategoryDropdownOpen && (
+                                                                            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: '#050505', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', marginTop: '4px', zIndex: 100, maxHeight: '200px', overflowY: 'auto', boxShadow: '0 10px 40px rgba(0,0,0,0.8)' }} className="custom-scroll">
+                                                                                {customCategories.map(cat => (
+                                                                                    <div
+                                                                                        key={cat}
+                                                                                        onClick={() => {
+                                                                                            setNewProductForm({ ...newProductForm, category: cat });
+                                                                                            setIsCategoryDropdownOpen(false);
+                                                                                        }}
+                                                                                        style={{ padding: '14px 15px', fontSize: '11px', cursor: 'pointer', color: newProductForm.category === cat ? 'black' : 'white', backgroundColor: newProductForm.category === cat ? 'var(--accent-turquoise)' : 'transparent', transition: 'all 0.2s', fontWeight: '700', letterSpacing: '1px' }}
+                                                                                        onMouseEnter={(e) => {
+                                                                                            if (newProductForm.category !== cat) {
+                                                                                                e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)';
+                                                                                                e.currentTarget.style.color = 'var(--accent-turquoise)';
+                                                                                            }
+                                                                                        }}
+                                                                                        onMouseLeave={(e) => {
+                                                                                            if (newProductForm.category !== cat) {
+                                                                                                e.currentTarget.style.backgroundColor = 'transparent';
+                                                                                                e.currentTarget.style.color = 'white';
+                                                                                            }
+                                                                                        }}
+                                                                                    >
+                                                                                        {cat}
+                                                                                    </div>
+                                                                                ))}
+                                                                            </div>
+                                                                        )}
                                                                     </div>
                                                                 </div>
                                                                 <div style={{ width: '120px' }}>
@@ -1894,65 +2312,81 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                                                                 </div>
                                                             </div>
 
-                                                            {/* Fila 2: Título ancho */}
+                                                            {/* Fila 2: Título */}
                                                             <div>
                                                                 <label style={{ display: 'block', fontSize: '11px', color: 'var(--accent-gold)', marginBottom: '10px', fontWeight: '800', letterSpacing: '3px', textTransform: 'uppercase' }}>TÍTULO DEL PRODUCTO</label>
                                                                 <input
                                                                     type="text"
-                                                                    value={newProductForm.original_description}
-                                                                    onChange={(e) => setNewProductForm({ ...newProductForm, original_description: e.target.value })}
+                                                                    value={newProductForm.nombre || ''}
+                                                                    onChange={(e) => setNewProductForm({ ...newProductForm, nombre: e.target.value })}
                                                                     style={{ width: '100%', backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '2px', padding: '18px', color: 'white', fontSize: '20px', fontWeight: '600', outline: 'none' }}
                                                                 />
                                                             </div>
+                                                        </div>
 
-                                                            {/* Fila 3: Especificaciones anchas */}
-                                                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                                                                <label style={{ display: 'block', fontSize: '11px', color: 'var(--accent-gold)', marginBottom: '15px', fontWeight: '800', letterSpacing: '2px', textTransform: 'uppercase' }}>ESPECIFICACIONE TÍCNICA COMPLETA</label>
-                                                                <textarea
-                                                                    value={Array.isArray(newProductForm.technical_specs) ? newProductForm.technical_specs.join('\n') : ''}
-                                                                    onChange={(e) => setNewProductForm({ ...newProductForm, technical_specs: e.target.value.split('\n').filter(l => l.trim()) })}
-                                                                    placeholder="Copia aquí la ficha tícnica del proveedor..."
-                                                                    style={{ width: '100%', flex: 1, minHeight: '400px', backgroundColor: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '2px', padding: '25px', color: '#ccc', fontSize: '15px', outline: 'none', resize: 'none', lineHeight: '1.8', fontFamily: 'monospace' }}
-                                                                />
-                                                            </div>
+                                                        {/* Columna Derecha: Specs */}
+                                                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                                                            <label style={{ display: 'block', fontSize: '11px', color: 'var(--accent-gold)', marginBottom: '15px', fontWeight: '800', letterSpacing: '2px', textTransform: 'uppercase' }}>ESPECIFICACIONES TÉCNICAS COMPLETAS</label>
+                                                            <textarea
+                                                                value={Array.isArray(newProductForm.technical_specs) ? newProductForm.technical_specs.join('\n') : ''}
+                                                                onChange={(e) => setNewProductForm({ ...newProductForm, technical_specs: e.target.value.split('\n').filter(l => l.trim()) })}
+                                                                placeholder="Copia aquí la ficha técnica del proveedor..."
+                                                                style={{ width: '100%', flex: 1, minHeight: '400px', backgroundColor: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '2px', padding: '25px', color: '#ccc', fontSize: '15px', outline: 'none', resize: 'none', lineHeight: '1.8', fontFamily: 'monospace' }}
+                                                            />
                                                         </div>
                                                     </div>
+                                                </div>
 
-                                                    <div style={{ marginTop: '40px', display: 'flex', gap: '20px', paddingBottom: '40px' }}>
-                                                        <button
-                                                            onClick={handleCreateManual}
-                                                            disabled={isSaving}
-                                                            style={{ flex: 1, backgroundColor: isSaving ? '#333' : 'var(--accent-gold)', color: 'black', border: 'none', padding: '25px', fontSize: '18px', fontWeight: '900', letterSpacing: '4px', cursor: isSaving ? 'not-allowed' : 'pointer', borderRadius: '4px', textTransform: 'uppercase', transition: 'all 0.3s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '15px' }}
-                                                            onMouseEnter={(e) => !isSaving && (e.currentTarget.style.transform = 'translateY(-2px)')}
-                                                            onMouseLeave={(e) => !isSaving && (e.currentTarget.style.transform = 'translateY(0)')}
-                                                        >
-                                                            {isSaving ? (
-                                                                <>
-                                                                    <Loader2 className="animate-spin" size={24} />
-                                                                    PROCESANDO IMAGEN...
-                                                                </>
-                                                            ) : 'GUARDAR PRODUCTO EN EL BUFFER'}
-                                                        </button>
-                                                        <button
-                                                            onClick={() => setIsAddingNew(false)}
-                                                            style={{ backgroundColor: 'transparent', color: '#555', border: '1px solid #333', padding: '25px 50px', fontSize: '16px', fontWeight: '700', letterSpacing: '2px', cursor: 'pointer', borderRadius: '4px', textTransform: 'uppercase' }}
-                                                        >
-                                                            CANCELAR
-                                                        </button>
-                                                    </div>
+                                                <div style={{ marginTop: '40px', display: 'flex', gap: '20px', paddingBottom: '40px' }}>
+                                                    <button
+                                                        onClick={handleCreateManual}
+                                                        disabled={isSaving}
+                                                        style={{ flex: 1, backgroundColor: isSaving ? '#333' : 'var(--accent-gold)', color: 'black', border: 'none', padding: '25px', fontSize: '18px', fontWeight: '900', letterSpacing: '4px', cursor: isSaving ? 'not-allowed' : 'pointer', borderRadius: '4px', textTransform: 'uppercase', transition: 'all 0.3s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '15px' }}
+                                                    >
+                                                        {isSaving ? (
+                                                            <>
+                                                                <Loader2 className="animate-spin" size={24} />
+                                                                PROCESANDO IMAGEN...
+                                                            </>
+                                                        ) : 'CREAR PRODUCTO'}
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setIsAddingNew(false)}
+                                                        style={{ backgroundColor: 'transparent', color: '#555', border: '1px solid #333', padding: '25px 50px', fontSize: '16px', fontWeight: '700', letterSpacing: '2px', cursor: 'pointer', borderRadius: '4px', textTransform: 'uppercase' }}
+                                                    >
+                                                        CANCELAR
+                                                    </button>
                                                 </div>
                                             </div>
                                         ) : selectedProduct ? (
                                             <div style={{ display: 'flex', flexDirection: 'column', height: '100%', maxWidth: '1600px', margin: '0 auto', width: '100%' }}>
-                                                <div style={{ height: '20px' }} /> {/* Spacer */}
+                                                <div style={{ padding: '0 0 20px 0', borderBottom: '1px solid rgba(255,255,255,0.05)', marginBottom: '30px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+                                                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                                                                <input
+                                                                    value={selectedProduct?.nombre || ''}
+                                                                    onChange={(e) => handleUpdateProduct({ nombre: e.target.value })}
+                                                                    style={{ background: 'none', border: 'none', color: 'white', fontSize: '32px', fontWeight: '800', fontFamily: 'var(--font-heading)', width: '600px', outline: 'none', letterSpacing: '2px', textTransform: 'uppercase' }}
+                                                                />
+                                                                {updatedProductIds.has(selectedProduct?.id) && (
+                                                                    <div style={{ background: 'var(--accent-turquoise)', borderRadius: '50%', width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 15px rgba(0, 212, 189, 0.3)' }}>
+                                                                        <Check size={14} color="black" />
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                            <span style={{ fontSize: '10px', color: '#444', fontWeight: '800', letterSpacing: '2px', marginTop: '5px' }}>MODIFICANDO PRODUCTO LOCALMENTE | REF: {selectedProduct?.id}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
 
-                                                <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: '60px', flex: 1 }}>
-                                                    {/* Columna Izquierda: Visual y Biblioteca (Reducida) */}
-                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                                                <div style={{ display: 'grid', gridTemplateColumns: '350px 1.2fr 1.5fr', gap: '40px', flex: 1 }}>
+                                                    {/* Columna Izquierda: Visual (Main) */}
+                                                    <div style={{ gridColumn: '1', gridRow: '1', display: 'flex', flexDirection: 'column', gap: '20px' }}>
                                                         <div>
                                                             <div style={{
                                                                 width: '100%',
-                                                                aspectRatio: '1/1',
+                                                                height: '35vh',
                                                                 backgroundColor: '#000',
                                                                 borderRadius: '2px',
                                                                 display: 'flex',
@@ -1970,230 +2404,253 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                                                                 />
                                                             </div>
                                                         </div>
+                                                    </div>
 
-                                                        {/* Miniaturas */}
-                                                        <div>
-                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                                                                <label style={{ fontSize: '11px', color: 'var(--accent-gold)', fontWeight: '800', letterSpacing: '3px', textTransform: 'uppercase' }}>BIBLIOTECA DE ACTIVOS</label>
-                                                                <button
-                                                                    onClick={() => {
-                                                                        const url = prompt('Ingresa la URL de la imagen:');
-                                                                        if (url && selectedProduct) {
-                                                                            const newImages = [...selectedProduct.images, url];
-                                                                            handleUpdateProduct({ images: newImages });
-                                                                            if (!catalogViewerImage) setCatalogViewerImage(url);
-                                                                        }
+                                                    {/* Columna Inferior Expandida: Miniaturas (Abarcando Col 1 y 2) */}
+                                                    <div style={{ gridColumn: '1 / span 2', gridRow: '2', marginTop: '5px' }}>
+                                                        <div style={{
+                                                            display: 'grid',
+                                                            gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))',
+                                                            gap: '12px',
+                                                            padding: '10px',
+                                                            background: 'rgba(255,255,255,0.01)',
+                                                            borderRadius: '4px',
+                                                            border: '1px solid rgba(255,255,255,0.03)',
+                                                            maxHeight: '500px',
+                                                            overflowY: 'auto'
+                                                        }} className="custom-scroll">
+                                                            {selectedProduct?.images && selectedProduct.images.length > 0 ? selectedProduct.images.map((img, i) => (
+                                                                <div
+                                                                    key={i}
+                                                                    onClick={() => setCatalogViewerImage(img)}
+                                                                    style={{
+                                                                        position: 'relative',
+                                                                        aspectRatio: '1/1',
+                                                                        borderRadius: '4px',
+                                                                        overflow: 'hidden',
+                                                                        border: `2px solid ${catalogViewerImage === img ? 'var(--accent-turquoise)' : 'rgba(255,255,255,0.05)'}`,
+                                                                        cursor: 'pointer',
+                                                                        opacity: catalogViewerImage === img ? 1 : 0.7,
+                                                                        transition: 'all 0.3s',
+                                                                        boxShadow: catalogViewerImage === img ? '0 0 20px rgba(0, 212, 189, 0.2)' : 'none'
                                                                     }}
-                                                                    style={{ background: 'none', border: 'none', color: 'var(--accent-turquoise)', fontSize: '10px', fontWeight: '800', cursor: 'pointer', letterSpacing: '1px' }}
                                                                 >
-                                                                    + URL
-                                                                </button>
-                                                            </div>
-                                                            <div style={{
-                                                                display: 'grid',
-                                                                gridTemplateColumns: 'repeat(20, 1fr)',
-                                                                gap: '8px',
-                                                                padding: '15px',
-                                                                background: 'rgba(255,255,255,0.02)',
-                                                                borderRadius: '4px',
-                                                                border: '1px solid rgba(255,255,255,0.05)',
-                                                                maxHeight: '400px',
-                                                                overflowY: 'auto'
-                                                            }} className="custom-scroll">
-                                                                {selectedProduct?.images && selectedProduct.images.map((img, i) => (
-                                                                    <div
-                                                                        key={i}
-                                                                        onClick={() => setCatalogViewerImage(img)}
-                                                                        style={{
-                                                                            position: 'relative',
-                                                                            aspectRatio: '1/1',
-                                                                            borderRadius: '2px',
-                                                                            overflow: 'hidden',
-                                                                            border: `2px solid ${catalogViewerImage === img ? 'var(--accent-turquoise)' : 'rgba(255,255,255,0.1)'}`,
-                                                                            cursor: 'pointer',
-                                                                            opacity: catalogViewerImage === img ? 1 : 0.6,
-                                                                            transition: 'all 0.3s'
-                                                                        }}
+                                                                    <img src={img} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                                    {catalogViewerImage === img && (
+                                                                        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 212, 189, 0.1)', pointerEvents: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                                            <Star size={18} color="var(--accent-turquoise)" fill="var(--accent-turquoise)" />
+                                                                        </div>
+                                                                    )}
+                                                                    <button
+                                                                        onClick={(e) => handleRemoveImage(e, img)}
+                                                                        style={{ position: 'absolute', top: '5px', right: '5px', background: 'rgba(239, 68, 68, 0.9)', color: 'white', border: 'none', borderRadius: '50%', width: '22px', height: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 10 }}
                                                                     >
-                                                                        <img src={img} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-
-                                                                        {catalogViewerImage === img && (
-                                                                            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 212, 189, 0.1)', pointerEvents: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                                                <Star size={14} color="var(--accent-turquoise)" fill="var(--accent-turquoise)" />
-                                                                            </div>
-                                                                        )}
-
-                                                                        {/* Botín de eliminar miniatura */}
-                                                                        <button
-                                                                            onClick={(e) => handleRemoveImage(e, img)}
-                                                                            style={{
-                                                                                position: 'absolute',
-                                                                                top: '2px',
-                                                                                right: '2px',
-                                                                                background: 'rgba(239, 68, 68, 0.9)',
-                                                                                color: 'white',
-                                                                                border: 'none',
-                                                                                borderRadius: '50%',
-                                                                                width: '18px',
-                                                                                height: '18px',
-                                                                                display: 'flex',
-                                                                                alignItems: 'center',
-                                                                                justifyContent: 'center',
-                                                                                cursor: 'pointer',
-                                                                                zIndex: 10
-                                                                            }}
-                                                                        >
-                                                                            <X size={10} />
-                                                                        </button>
-                                                                    </div>
-                                                                ))}
-                                                            </div>
+                                                                        <X size={12} />
+                                                                    </button>
+                                                                </div>
+                                                            )) : (
+                                                                <div style={{ gridColumn: '1/-1', padding: '40px', textAlign: 'center', opacity: 0.1 }}>
+                                                                    <ImageIcon size={40} />
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </div>
 
-                                                    {/* Columna Derecha: Metadatos + Specs */}
-                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                                                        {/* Fila 1: Mayorista, SKU y Categoría */}
-                                                        <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
-                                                            <div style={{ width: '140px' }}>
-                                                                <label style={{ display: 'block', fontSize: '11px', color: 'var(--accent-gold)', marginBottom: '10px', fontWeight: '800', letterSpacing: '3px', textTransform: 'uppercase' }}>MAYORISTA</label>
+                                                    {/* Columna Central: Metadatos */}
+                                                    <div style={{ gridColumn: '2', gridRow: '1', display: 'flex', flexDirection: 'column', gap: '30px' }}>
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                                                            <div>
+                                                                <label style={{ display: 'block', fontSize: '10px', color: 'var(--accent-gold)', marginBottom: '8px', fontWeight: '800', letterSpacing: '2px', textTransform: 'uppercase' }}>MAYORISTA</label>
                                                                 <input
                                                                     type="text"
                                                                     value={selectedProduct?.wholesaler || ''}
                                                                     onChange={(e) => handleUpdateProduct({ wholesaler: e.target.value })}
-                                                                    style={{ width: '100%', backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '2px', padding: '15px', color: '#888', fontSize: '15px', outline: 'none' }}
+                                                                    style={{ width: '100%', backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '2px', padding: '15px', color: '#888', fontSize: '14px', outline: 'none' }}
                                                                 />
                                                             </div>
-                                                            <div style={{ width: '140px' }}>
-                                                                <label style={{ display: 'block', fontSize: '11px', color: 'var(--accent-gold)', marginBottom: '10px', fontWeight: '800', letterSpacing: '3px', textTransform: 'uppercase' }}>CÓDIGO / SKU</label>
+                                                            <div>
+                                                                <label style={{ display: 'block', fontSize: '10px', color: 'var(--accent-gold)', marginBottom: '8px', fontWeight: '800', letterSpacing: '2px', textTransform: 'uppercase' }}>CÓDIGO / SKU</label>
                                                                 <input
-                                                                    value={selectedProduct?.external_id || ''}
-                                                                    onChange={(e) => handleUpdateProduct({ external_id: e.target.value })}
-                                                                    style={{ width: '100%', backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '2px', padding: '15px', color: '#888', fontSize: '15px', outline: 'none' }}
+                                                                    value={selectedProduct?.sku_externo || ''}
+                                                                    onChange={(e) => handleUpdateProduct({ sku_externo: e.target.value })}
+                                                                    style={{ width: '100%', backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '2px', padding: '15px', color: '#888', fontSize: '14px', outline: 'none' }}
                                                                 />
                                                             </div>
-                                                            <div style={{ flex: 1 }}>
-                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                                                                    <label style={{ fontSize: "11px", color: "var(--accent-gold)", fontWeight: "800", letterSpacing: "3px", textTransform: "uppercase", margin: 0 }}>CATEGORÍAS (COMA PARA DOBLE CAT)</label>
+                                                            <div>
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                                                    <label style={{ fontSize: "10px", color: "var(--accent-gold)", fontWeight: "800", letterSpacing: "2px", textTransform: "uppercase" }}>CATEGORÍA</label>
                                                                     <button
                                                                         onClick={() => setIsAddingCategory(!isAddingCategory)}
-                                                                        style={{ background: 'none', border: 'none', color: 'var(--accent-turquoise)', fontSize: '10px', fontWeight: '700', cursor: 'pointer', letterSpacing: '1px', textTransform: 'uppercase' }}
+                                                                        style={{ background: 'none', border: 'none', color: 'var(--accent-turquoise)', fontSize: '9px', fontWeight: '700', cursor: 'pointer', letterSpacing: '1px' }}
                                                                     >
-                                                                        {isAddingCategory ? "← VOLVER" : "+ NUEVA"}
+                                                                        {isAddingCategory ? "ANULAR" : "+ NUEVA"}
                                                                     </button>
                                                                 </div>
                                                                 {isAddingCategory ? (
                                                                     <div style={{ display: 'flex', gap: '10px' }}>
                                                                         <input
                                                                             type="text"
-                                                                            placeholder="EJ: ECOLOGICOS, BOTELLAS..."
                                                                             value={selectedProduct?.category || ''}
                                                                             onChange={(e) => handleUpdateProduct({ category: e.target.value })}
-                                                                            style={{
-                                                                                width: '100%',
-                                                                                padding: '16px 15px',
-                                                                                backgroundColor: 'rgba(255,255,255,0.05)',
-                                                                                border: '1px solid var(--accent-turquoise)',
-                                                                                color: 'white',
-                                                                                fontSize: '11px',
-                                                                                fontWeight: '700',
-                                                                                borderRadius: '4px',
-                                                                                outline: 'none',
-                                                                                textTransform: 'uppercase'
-                                                                            }}
+                                                                            placeholder="EJ: TECNOLOGÍA"
+                                                                            style={{ width: '100%', padding: '14px', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid var(--accent-turquoise)', color: 'white', borderRadius: '2px', fontSize: '11px', outline: 'none' }}
                                                                         />
-                                                                        <button
-                                                                            onClick={handleAddCategory}
-                                                                            style={{ backgroundColor: 'var(--accent-turquoise)', color: 'black', border: 'none', borderRadius: '2px', padding: '0 20px', fontWeight: '800', cursor: 'pointer', fontSize: '11px', textTransform: 'uppercase' }}
-                                                                        >
-                                                                            AÑADIR
-                                                                        </button>
                                                                     </div>
                                                                 ) : (
-                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                                                        <div style={{ position: 'relative', marginBottom: '8px' }}>
-                                                                            <select
-                                                                                value={selectedProduct?.category || ''}
-                                                                                onChange={(e) => handleUpdateProduct({ category: e.target.value })}
-                                                                                style={{
-                                                                                    width: '100%',
-                                                                                    padding: '16px 15px',
-                                                                                    backgroundColor: 'rgba(255,255,255,0.02)',
-                                                                                    border: '1px solid rgba(255,255,255,0.05)',
-                                                                                    color: 'white',
-                                                                                    fontSize: '11px',
-                                                                                    fontWeight: '700',
-                                                                                    borderRadius: '4px',
-                                                                                    outline: 'none',
-                                                                                    textTransform: 'uppercase',
-                                                                                    cursor: 'pointer',
-                                                                                    appearance: 'none',
-                                                                                    height: '48px'
-                                                                                }}
-                                                                            >
-                                                                                <option value="" disabled>SELECCIONAR CATEGORÍA...</option>
-                                                                                {customCategories.map(cat => (
-                                                                                    <option key={cat} value={cat} style={{ color: 'black' }}>
-                                                                                        {cat}
-                                                                                    </option>
-                                                                                ))}
-                                                                            </select>
-                                                                            <div style={{ position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--accent-turquoise)' }}>
-                                                                                <ChevronRight size={14} style={{ transform: 'rotate(90deg)' }} />
-                                                                            </div>
+                                                                    <div style={{ position: 'relative' }}>
+                                                                        <div
+                                                                            onClick={() => setIsCategoryDropdownOpen(!isCategoryDropdownOpen)}
+                                                                            style={{ width: '100%', padding: '14px', backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', color: 'white', borderRadius: '2px', fontSize: '11px', outline: 'none', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', transition: 'all 0.3s' }}
+                                                                            onMouseEnter={(e) => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'}
+                                                                            onMouseLeave={(e) => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.05)'}
+                                                                        >
+                                                                            <span style={{ fontWeight: '700', letterSpacing: '1px' }}>{selectedProduct?.category || 'SELECCIONAR CATEGORÍA'}</span>
+                                                                            <ChevronRight size={14} style={{ transform: isCategoryDropdownOpen ? 'rotate(-90deg)' : 'rotate(90deg)', transition: 'transform 0.2s', color: 'var(--accent-turquoise)' }} />
                                                                         </div>
+                                                                        {isCategoryDropdownOpen && (
+                                                                            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: '#050505', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', marginTop: '4px', zIndex: 100, maxHeight: '200px', overflowY: 'auto', boxShadow: '0 10px 40px rgba(0,0,0,0.8)' }} className="custom-scroll">
+                                                                                {customCategories.map(cat => (
+                                                                                    <div
+                                                                                        key={cat}
+                                                                                        onClick={() => {
+                                                                                            handleUpdateProduct({ category: cat });
+                                                                                            setIsCategoryDropdownOpen(false);
+                                                                                        }}
+                                                                                        style={{ padding: '14px 15px', fontSize: '11px', cursor: 'pointer', color: selectedProduct?.category === cat ? 'black' : 'white', backgroundColor: selectedProduct?.category === cat ? 'var(--accent-turquoise)' : 'transparent', transition: 'all 0.2s', fontWeight: '700', letterSpacing: '1px' }}
+                                                                                        onMouseEnter={(e) => {
+                                                                                            if (selectedProduct?.category !== cat) {
+                                                                                                e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)';
+                                                                                                e.currentTarget.style.color = 'var(--accent-turquoise)';
+                                                                                            }
+                                                                                        }}
+                                                                                        onMouseLeave={(e) => {
+                                                                                            if (selectedProduct?.category !== cat) {
+                                                                                                e.currentTarget.style.backgroundColor = 'transparent';
+                                                                                                e.currentTarget.style.color = 'white';
+                                                                                            }
+                                                                                        }}
+                                                                                    >
+                                                                                        {cat}
+                                                                                    </div>
+                                                                                ))}
+                                                                            </div>
+                                                                        )}
                                                                     </div>
                                                                 )}
                                                             </div>
+                                                            <div style={{ marginTop: '30px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '20px' }}>
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                                                                    <label style={{ fontSize: "11px", color: "var(--accent-gold)", fontWeight: "900", letterSpacing: "3px", textTransform: "uppercase" }}>TÍTULO DEL PRODUCTO</label>
+                                                                    <button
+                                                                        onClick={handleAutoGenerateSEO}
+                                                                        disabled={isGeneratingSEO}
+                                                                        style={{
+                                                                            backgroundColor: isGeneratingSEO ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 212, 189, 0.05)',
+                                                                            color: isGeneratingSEO ? 'rgba(255, 255, 255, 0.4)' : 'var(--accent-turquoise)',
+                                                                            border: '1px solid',
+                                                                            borderColor: isGeneratingSEO ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 212, 189, 0.3)',
+                                                                            padding: '6px 12px',
+                                                                            fontSize: '9px',
+                                                                            fontWeight: '800',
+                                                                            letterSpacing: '2px',
+                                                                            cursor: isGeneratingSEO ? 'not-allowed' : 'pointer',
+                                                                            borderRadius: '2px',
+                                                                            display: 'flex',
+                                                                            alignItems: 'center',
+                                                                            gap: '6px'
+                                                                        }}
+                                                                    >
+                                                                        {isGeneratingSEO ? <Loader2 className="animate-spin" size={12} /> : <Sparkles size={12} />}
+                                                                        {isGeneratingSEO ? 'GENERANDO...' : 'AUTO-GENERAR SEO'}
+                                                                    </button>
+                                                                </div>
+                                                                <textarea
+                                                                    value={selectedProduct?.nombre || ""}
+                                                                    onChange={(e) => handleUpdateProduct({ nombre: e.target.value })}
+                                                                    style={{ width: "100%", height: "60px", backgroundColor: "rgba(255,255,255,0.01)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "2px", padding: "15px", color: "white", fontSize: "16px", fontWeight: "600", outline: "none", resize: "none", lineHeight: "1.4" }}
+                                                                />
+                                                            </div>
                                                         </div>
+                                                    </div>
 
-
-                                                        {/* Título y Specs (Added) */}
-                                                        <div style={{ marginTop: "20px" }}>
-                                                            <label style={{ display: "block", fontSize: "11px", color: "var(--accent-gold)", marginBottom: "10px", fontWeight: "800", letterSpacing: "3px", textTransform: "uppercase" }}>NOMBRE DEL PRODUCTO</label>
-                                                            <input
-                                                                value={selectedProduct?.name || ''}
-                                                                onChange={(e) => handleUpdateProduct({ name: e.target.value })}
-                                                                style={{ width: "100%", backgroundColor: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "2px", padding: "15px", color: "white", fontSize: "18px", fontWeight: "600", outline: "none" }}
-                                                            />
-                                                        </div>
-
-                                                        <div style={{ flex: 1, display: "flex", flexDirection: "column", marginTop: "20px" }}>
-                                                            <label style={{ display: "block", fontSize: "11px", color: "var(--accent-gold)", marginBottom: "10px", fontWeight: "800", letterSpacing: "2px", textTransform: "uppercase" }}>CARACTERÍSTICA</label>
+                                                    {/* Columna Derecha: Características + Acciones */}
+                                                    <div style={{ gridColumn: '3', gridRow: '1 / span 2', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                                                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                            <label style={{ display: "block", fontSize: "11px", color: "var(--accent-turquoise)", marginBottom: "15px", fontWeight: "900", letterSpacing: "3px", textTransform: "uppercase" }}>CARACTERÍSTICAS TÉCNICAS</label>
                                                             <textarea
                                                                 value={selectedProduct?.technical_specs?.join("\n") || ""}
                                                                 onChange={(e) => handleUpdateProduct({ technical_specs: e.target.value.split("\n").filter(l => l.trim()) })}
-                                                                style={{ width: "100%", flex: 1, minHeight: "300px", backgroundColor: "rgba(255,255,255,0.01)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "2px", padding: "20px", color: "#ccc", fontSize: "14px", outline: "none", resize: "none", lineHeight: "1.6" }}
+                                                                style={{ width: "100%", minHeight: "220px", backgroundColor: "rgba(10, 10, 10, 0.4)", border: "1px solid rgba(0, 212, 189, 0.1)", borderRadius: "4px", padding: "20px", color: "#888", fontSize: "14px", outline: "none", resize: "vertical", lineHeight: "1.8", fontFamily: 'monospace' }}
+                                                                placeholder="Una característica por línea..."
                                                             />
                                                         </div>
 
-                                                        {/* Botones de AcciÍn (Added) */}
-                                                        <div style={{ marginTop: "30px", display: "flex", gap: "15px", paddingBottom: "30px" }}>
-                                                            <button
-                                                                onClick={handleSaveChanges}
-                                                                disabled={isSaving}
-                                                                style={{ flex: 1, backgroundColor: isSaving ? "#333" : "var(--accent-gold)", color: "black", border: "none", padding: "20px", fontSize: "14px", fontWeight: "900", letterSpacing: "2px", cursor: isSaving ? "not-allowed" : "pointer", borderRadius: "4px", textTransform: "uppercase", display: "flex", alignItems: "center", justifyContent: "center", gap: "10px" }}
-                                                            >
-                                                                {isSaving ? <Loader2 className="animate-spin" size={20} /> : <Save size={20} />}
-                                                                GUARDAR
-                                                            </button>
+                                                        <div style={{ display: "flex", gap: "10px" }}>
                                                             <button
                                                                 onClick={handlePublish}
-                                                                style={{ flex: 1, backgroundColor: "var(--accent-turquoise)", color: "black", border: "none", padding: "20px", fontSize: "14px", fontWeight: "900", letterSpacing: "2px", cursor: "pointer", borderRadius: "4px", textTransform: "uppercase", display: "flex", alignItems: "center", justifyContent: "center", gap: "10px" }}
+                                                                disabled={isSaving}
+                                                                style={{ flex: 3, backgroundColor: isSaving ? "#222" : "var(--accent-turquoise)", color: "black", border: "none", padding: '16px', fontSize: "11px", fontWeight: "900", letterSpacing: "2px", cursor: isSaving ? "not-allowed" : "pointer", borderRadius: "2px", textTransform: "uppercase", display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", transition: "all 0.3s" }}
                                                             >
-                                                                <Globe size={20} />
-                                                                PUBLICAR
+                                                                {isSaving ? (
+                                                                    <>
+                                                                        <Loader2 className="animate-spin" size={16} /> ACTUALIZANDO...
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <Save size={16} /> ACTUALIZAR Y PUBLICAR
+                                                                    </>
+                                                                )}
                                                             </button>
                                                             <button
                                                                 onClick={handleReject}
-                                                                style={{ backgroundColor: "rgba(239, 68, 68, 0.1)", color: "#ef4444", border: "1px solid #ef4444", padding: "20px", borderRadius: "4px", cursor: "pointer" }}
+                                                                style={{ flex: 1, backgroundColor: "rgba(239, 68, 68, 0.1)", color: "#ef4444", border: "1px solid rgba(239, 68, 68, 0.2)", padding: '16px', borderRadius: "2px", cursor: "pointer", display: 'flex', alignItems: 'center', justifyContent: 'center', transition: "all 0.3s" }}
                                                             >
-                                                                <Trash2 size={20} />
+                                                                <Trash2 size={16} />
                                                             </button>
+                                                        </div>
+
+                                                        {/* Sección Datos Generados por @seo_mkt */}
+                                                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '15px', padding: '20px', backgroundColor: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '4px' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px' }}>
+                                                                <Sparkles size={14} color="var(--accent-gold)" />
+                                                                <span style={{ fontSize: '10px', color: 'var(--accent-gold)', fontWeight: '900', letterSpacing: '2px', textTransform: 'uppercase' }}>METADATA SEO (GENERADA POR IA)</span>
+                                                            </div>
+                                                            <div>
+                                                                <label style={{ display: 'block', fontSize: '9px', color: '#666', marginBottom: '5px', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase' }}>TÍTULO SEO B2B</label>
+                                                                <input
+                                                                    value={selectedProduct?.seo_title || ''}
+                                                                    onChange={(e) => handleUpdateProduct({ seo_title: e.target.value })}
+                                                                    placeholder="Auto-generado por seo_mkt..."
+                                                                    style={{ width: '100%', backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', color: 'white', borderRadius: '2px', padding: '12px', fontSize: '12px', outline: 'none', transition: 'border-color 0.3s' }}
+                                                                    onMouseEnter={(e) => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'}
+                                                                    onMouseLeave={(e) => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.05)'}
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <label style={{ display: 'block', fontSize: '9px', color: '#666', marginBottom: '5px', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase' }}>KEYWORDS (COLA LARGA)</label>
+                                                                <input
+                                                                    value={selectedProduct?.seo_keywords || ''}
+                                                                    onChange={(e) => handleUpdateProduct({ seo_keywords: e.target.value })}
+                                                                    placeholder="Auto-generado por seo_mkt..."
+                                                                    style={{ width: '100%', backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', color: 'var(--accent-turquoise)', borderRadius: '2px', padding: '12px', fontSize: '12px', outline: 'none', transition: 'border-color 0.3s' }}
+                                                                    onMouseEnter={(e) => e.currentTarget.style.borderColor = 'rgba(0, 212, 189, 0.3)'}
+                                                                    onMouseLeave={(e) => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.05)'}
+                                                                />
+                                                            </div>
+                                                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                                                                <label style={{ display: 'block', fontSize: '9px', color: '#666', marginBottom: '5px', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase' }}>META DESCRIPCIÓN B2B</label>
+                                                                <textarea
+                                                                    value={selectedProduct?.seo_description || ''}
+                                                                    onChange={(e) => handleUpdateProduct({ seo_description: e.target.value })}
+                                                                    placeholder="Auto-generado por seo_mkt..."
+                                                                    style={{ width: '100%', flex: 1, minHeight: '90px', backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', color: '#aaa', borderRadius: '2px', padding: '12px', fontSize: '12px', outline: 'none', resize: 'none', lineHeight: '1.5', transition: 'border-color 0.3s' }}
+                                                                    onMouseEnter={(e) => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'}
+                                                                    onMouseLeave={(e) => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.05)'}
+                                                                />
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
-
                                             </div>
                                         ) : (
                                             <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", opacity: 0.1 }}>
@@ -2201,16 +2658,29 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                                             </div>
                                         )}
                                     </div>
-                                </React.Fragment >
-                            )
-                            }
+                                </React.Fragment>
+                            )}
                             {
                                 activeTab === "gallery" && (
                                     <React.Fragment>
                                         <div className="custom-scroll" style={{ borderRight: "1px solid rgba(255,255,255,0.05)", overflowY: "auto", padding: "32px 40px", backgroundColor: "rgba(0,0,0,0.2)" }}>
-                                            <h3 style={{ color: "var(--accent-gold)", fontSize: "11px", fontWeight: "900", letterSpacing: "3px", textTransform: "uppercase", marginBottom: "30px" }}>SECCIONES</h3>
+                                            <h3 style={{ color: "var(--accent-gold)", fontSize: "11px", fontWeight: "900", letterSpacing: "3px", textTransform: "uppercase", marginBottom: "30px" }}>SECCIONES DISPONIBLES</h3>
                                             <div style={{ display: "grid", gap: "10px" }}>
-                                                {customCategories.map(sec => (
+
+
+                                                {/* Dynamic Sections from useWebContent */}
+                                                {content.sections && content.sections.map((sec: any) => (
+                                                    <button
+                                                        key={sec.id || sec.title1}
+                                                        onClick={() => setSelectedGallerySection(sec.id || sec.title1)}
+                                                        style={{ textAlign: "left", padding: "15px 20px", background: selectedGallerySection === (sec.id || sec.title1) ? "rgba(0, 212, 189, 0.05)" : "transparent", border: "1px solid", borderColor: selectedGallerySection === (sec.id || sec.title1) ? "var(--accent-turquoise)" : "transparent", color: selectedGallerySection === (sec.id || sec.title1) ? "var(--accent-turquoise)" : "#555", borderRadius: "4px", textTransform: "uppercase", fontSize: "11px", fontWeight: "800", cursor: "pointer", letterSpacing: "2px" }}
+                                                    >
+                                                        {sec.title1 || sec.id || 'SECCIÓN SIN TÍTULO'}
+                                                    </button>
+                                                ))}
+
+                                                {/* Fallback Static Categories if no sections loaded */}
+                                                {(!content.sections || content.sections.length === 0) && customCategories.map(sec => (
                                                     <button
                                                         key={sec}
                                                         onClick={() => setSelectedGallerySection(sec)}
@@ -2219,52 +2689,87 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                                                         {sec}
                                                     </button>
                                                 ))}
+
+
                                             </div>
                                         </div>
+
                                         <div className="custom-scroll" style={{ padding: "60px", overflowY: "auto", backgroundColor: "#050505" }}>
-                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "60px" }}>
+                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "60px" }}>
                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
                                                     <h2 style={{ color: "white", fontFamily: "var(--font-heading)", fontSize: "32px", margin: 0, letterSpacing: "4px", textTransform: "uppercase" }}>
-                                                        GALERÍA: <span style={{ color: "var(--accent-gold)" }}>{selectedGallerySection.toUpperCase()}</span>
+                                                        GESTIÓN DE <span style={{ color: "var(--accent-gold)" }}>GRILLA DINÁMICA</span>
                                                     </h2>
-                                                    <p style={{ fontSize: '10px', color: '#444', fontWeight: '800', letterSpacing: '1px' }}>
-                                                        SINCRO: {content.sections.some(s =>
-                                                            (s.id || '').toLowerCase().includes(selectedGallerySection.toLowerCase()) ||
-                                                            (s.title1 || (s as any).title || '').toLowerCase().includes(selectedGallerySection.toLowerCase())
-                                                        )
-                                                            ? 'CONECTADA A LANDING ✓'
-                                                            : 'SECCIÓN NO ENCONTRADA EN LANDING (VERIFICA NOMBRE)'}
+                                                    <p style={{ fontSize: '10px', color: '#444', fontWeight: '800', letterSpacing: '1px', textTransform: 'uppercase' }}>
+                                                        ASIGNANDO A: {((content.sections?.find((s: any) => s.id === selectedGallerySection || s.title1 === selectedGallerySection)?.title1) || selectedGallerySection || 'SELECCIONA UNA SECCIÓN').toUpperCase()}
                                                     </p>
                                                 </div>
-                                                <div style={{ display: "flex", gap: "20px" }}>
-                                                    {/* BotÍn de subida eliminado por requerimiento */}
+
+                                                <div style={{ display: 'flex', gap: '20px' }}>
+                                                    {activeImage && (
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '20px', background: 'rgba(0,212,189,0.05)', padding: '15px 30px', borderRadius: '4px', border: '1px solid var(--accent-turquoise)' }}>
+                                                            <img src={activeImage} style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '2px' }} />
+                                                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                                <span style={{ fontSize: '10px', fontWeight: '900', color: 'var(--accent-turquoise)', letterSpacing: '1px' }}>IMAGEN PREPARADA</span>
+                                                                <button
+                                                                    onClick={handleAssignToGrilla}
+                                                                    disabled={isSaving || !selectedGallerySection}
+                                                                    style={{ background: 'none', border: 'none', color: 'white', fontSize: '12px', fontWeight: '900', cursor: 'pointer', padding: 0, textAlign: 'left', textDecoration: 'underline' }}
+                                                                >
+                                                                    {isSaving ? 'ASIGNANDO...' : 'ENVIAR A SECCIÓN ↑'}
+                                                                </button>
+                                                            </div>
+                                                            <button
+                                                                onClick={() => setActiveImage(null)}
+                                                                style={{ background: 'rgba(239, 68, 68, 0.2)', border: 'none', color: '#ef4444', width: '30px', height: '30px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                                            >
+                                                                <Trash2 size={14} />
+                                                            </button>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
 
-                                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: "25px" }}>
-                                                {galleryImages.map((src, index) => (
-                                                    <div key={index} style={{ position: "relative", aspectRatio: "4/3", borderRadius: "8px", overflow: "hidden", border: "1px solid rgba(255,255,255,0.05)", background: "#111" }}>
-                                                        <img src={src} alt="GalerÍa" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                                                        <button
-                                                            onClick={() => handleRemoveGalleryImage(index)}
-                                                            style={{ position: "absolute", top: "10px", right: "10px", background: "rgba(239, 68, 68, 0.9)", color: "white", border: "none", borderRadius: "50%", width: "30px", height: "30px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", boxShadow: "0 4px 10px rgba(0,0,0,0.3)" }}
+                                            <div style={{ marginBottom: '40px', padding: '20px', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '4px', background: 'rgba(255,255,255,0.02)' }}>
+                                                <h3 style={{ fontSize: '11px', color: '#555', fontWeight: '900', marginBottom: '15px', letterSpacing: '2px' }}>VISTA PREVIA DE LA SECCIÓN SELECCIONADA</h3>
+                                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "30px" }}>
+                                                    {galleryImages.map((src, index) => (
+                                                        <div key={index} style={{ position: "relative", aspectRatio: "1/1", borderRadius: "4px", overflow: "hidden", border: "1px solid rgba(255,255,255,0.05)", background: "#111", boxShadow: "0 20px 50px rgba(0,0,0,0.5)" }}>
+                                                            <img src={src} alt="Galería" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                                            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '15px', background: 'linear-gradient(to top, rgba(0,0,0,0.9), transparent)', display: 'flex', justifyContent: 'flex-end' }}>
+                                                                <button
+                                                                    onClick={() => handleRemoveGalleryImage(index)}
+                                                                    style={{ background: "rgba(239, 68, 68, 0.9)", color: "white", border: "none", borderRadius: "4px", width: "30px", height: "30px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+                                                                >
+                                                                    <Trash2 size={14} />
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+
+                                                    {uploadingGallery && (
+                                                        <div style={{ aspectRatio: "1/1", borderRadius: "4px", border: "1px dashed var(--accent-turquoise)", background: "rgba(0, 212, 189, 0.05)", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: 'column', gap: '10px' }}>
+                                                            <Loader2 className="animate-spin" size={30} color="var(--accent-turquoise)" />
+                                                            <span style={{ fontSize: '10px', color: 'var(--accent-turquoise)', fontWeight: '800' }}>SUBIENDO...</span>
+                                                        </div>
+                                                    )}
+
+                                                    {galleryImages.length === 0 && !uploadingGallery && (
+                                                        <div
+                                                            style={{
+                                                                gridColumn: "1 / -1", padding: "100px", textAlign: "center",
+                                                                border: "2px dashed rgba(255,255,255,0.05)", borderRadius: "12px",
+                                                                color: "#444"
+                                                            }}
                                                         >
-                                                            <X size={16} />
-                                                        </button>
-                                                    </div>
-                                                ))}
-                                                {galleryImages.length === 0 && !uploadingGallery && (
-                                                    <div
-                                                        style={{
-                                                            gridColumn: "1 / -1", padding: "100px", textAlign: "center",
-                                                            border: "2px dashed rgba(255,255,255,0.05)", borderRadius: "12px",
-                                                            color: "#444"
-                                                        }}
-                                                    >
-                                                        <Plus size={60} style={{ marginBottom: "20px", opacity: 0.1 }} />
-                                                        <p style={{ letterSpacing: "2px", textTransform: "uppercase", fontSize: "12px" }}>No hay imágenes en esta galería</p>
-                                                    </div>
-                                                )}
+                                                            <div style={{ marginBottom: "20px", display: 'inline-flex', padding: '20px', borderRadius: '50%', background: 'rgba(255,255,255,0.02)' }}>
+                                                                <ImageIcon size={40} style={{ opacity: 0.3 }} />
+                                                            </div>
+                                                            <p style={{ letterSpacing: "2px", textTransform: "uppercase", fontSize: "14px", fontWeight: '700', color: '#666' }}>COLECCIÓN VACÍA</p>
+                                                            <p style={{ fontSize: "12px", color: '#444', maxWidth: '300px', margin: '10px auto' }}>Arrastra tus imágenes especiales aquí o usa la herramienta de subida para empezar.</p>
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
                                     </React.Fragment>
@@ -2278,11 +2783,11 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                                             <div style={{ maxWidth: "1200px", margin: "0 auto" }}>
                                                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "40px" }}>
                                                     <h2 style={{ color: "white", fontFamily: "var(--font-heading)", fontSize: "32px", margin: 0, letterSpacing: "4px", textTransform: "uppercase" }}>
-                                                        GESTIÍN DE <span style={{ color: "var(--accent-gold)" }}>BANNER PRINCIPAL (HERO)</span>
+                                                        GESTIÓN DE <span style={{ color: "var(--accent-gold)" }}>BANNER PRINCIPAL (HERO)</span>
                                                     </h2>
                                                     {activeImage && (
                                                         <div style={{ display: "flex", alignItems: "center", gap: "10px", background: "rgba(0,212,189,0.05)", padding: "10px 20px", borderRadius: "100px", border: "1px solid rgba(0,212,189,0.2)" }}>
-                                                            <span style={{ fontSize: "10px", color: "var(--accent-turquoise)", fontWeight: "900", letterSpacing: "1px" }}>IMAGEN CARGADA LISTA</span>
+                                                            <span style={{ fontSize: "10px", color: "var(--accent-turquoise)", fontWeight: "900", letterSpacing: "1px" }}>IMAGEN LISTA</span>
                                                             <img src={activeImage} style={{ width: "30px", height: "30px", borderRadius: "50%", objectFit: "cover", border: "1px solid var(--accent-turquoise)" }} />
                                                         </div>
                                                     )}
@@ -2324,6 +2829,56 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                                                         );
                                                     })}
                                                 </div>
+
+                                                {/* VISOR DE BIBLIOTECA DE MARKETING (RECURSOS JPG) */}
+                                                <div style={{ marginTop: '60px', padding: '40px', background: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.03)', borderRadius: '12px' }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
+                                                        <div>
+                                                            <h3 style={{ color: 'var(--accent-turquoise)', fontSize: '14px', fontWeight: '900', letterSpacing: '4px', margin: 0, textTransform: 'uppercase' }}>BIBLIOTECA DE MARKETING</h3>
+                                                            <p style={{ color: '#444', fontSize: '11px', fontWeight: '700', margin: '5px 0 0' }}>RECURSOS LIVIANOS (JPG) TRATADOS PARA CORREO Y WEB</p>
+                                                        </div>
+                                                        <button
+                                                            onClick={fetchMarketingStorage}
+                                                            style={{ padding: '10px 20px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: '#999', borderRadius: '4px', fontSize: '10px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
+                                                        >
+                                                            <RefreshCw size={14} className={marketingLibraryLoading ? 'animate-spin' : ''} />
+                                                            REFRESCAR
+                                                        </button>
+                                                    </div>
+
+                                                    {marketingLibraryLoading && marketingLibraryImages.length === 0 ? (
+                                                        <div style={{ height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                            <Loader2 className="animate-spin" size={30} color="var(--accent-turquoise)" />
+                                                        </div>
+                                                    ) : (
+                                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '20px' }}>
+                                                            {marketingLibraryImages.map((url, i) => (
+                                                                <div
+                                                                    key={i}
+                                                                    onClick={() => setActiveImage(url)}
+                                                                    style={{
+                                                                        aspectRatio: '1/1',
+                                                                        background: '#000',
+                                                                        borderRadius: '4px',
+                                                                        border: `2px solid ${activeImage === url ? 'var(--accent-turquoise)' : 'rgba(255,255,255,0.05)'}`,
+                                                                        cursor: 'pointer',
+                                                                        overflow: 'hidden',
+                                                                        transition: 'all 0.3s',
+                                                                        position: 'relative',
+                                                                        transform: activeImage === url ? 'scale(0.95)' : 'scale(1)'
+                                                                    }}
+                                                                >
+                                                                    <img src={url} style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: activeImage === url ? 1 : 0.7 }} alt={`Mkt ${i}`} />
+                                                                    {activeImage === url && (
+                                                                        <div style={{ position: 'absolute', top: '10px', right: '10px', background: 'var(--accent-turquoise)', borderRadius: '50%', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                                            <Check size={12} color="black" />
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
                                     </React.Fragment>
@@ -2336,22 +2891,46 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                                         <div className="custom-scroll" style={{ padding: "60px", overflowY: "auto", backgroundColor: "#050505", gridColumn: "1 / -1", height: '100%' }}>
                                             <div style={{ maxWidth: "1200px", margin: "0 auto" }}>
                                                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "40px" }}>
-                                                    <h2 style={{ color: "white", fontFamily: "var(--font-heading)", fontSize: "32px", margin: 0, letterSpacing: "4px", textTransform: "uppercase" }}>
-                                                        AI CONTENT <span style={{ color: "var(--accent-gold)" }}>FACTORY</span>
-                                                    </h2>
-                                                    <div style={{ display: "flex", gap: "15px" }}>
-                                                        <button
-                                                            onClick={handleGenerateMarketingAI}
-                                                            disabled={isGeneratingAI || !selectedProduct}
-                                                            style={{ background: "var(--accent-turquoise)", color: "black", padding: "15px 30px", borderRadius: "4px", fontSize: "12px", fontWeight: "900", cursor: "pointer", textTransform: "uppercase", display: 'flex', alignItems: 'center', gap: '8px' }}
-                                                        >
-                                                            {isGeneratingAI ? <Loader2 className="animate-spin" size={16} /> : <Sparkles size={16} />}
-                                                            {isGeneratingAI ? "GENERANDO..." : "GENERAR MARKETING (GEMINI)"}
-                                                        </button>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                                                        <h2 style={{ color: "white", fontFamily: "var(--font-heading)", fontSize: "32px", margin: 0, letterSpacing: "4px", textTransform: "uppercase" }}>
+                                                            AI CONTENT <span style={{ color: "var(--accent-gold)" }}>FACTORY</span>
+                                                        </h2>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                                                            {activeImage && (
+                                                                <div style={{ display: "flex", alignItems: "center", gap: "10px", background: "rgba(0,212,189,0.05)", padding: "5px 12px", borderRadius: "100px", border: "1px solid rgba(0,212,189,0.1)" }}>
+                                                                    <span style={{ fontSize: "9px", color: "var(--accent-turquoise)", fontWeight: "900", letterSpacing: "1px" }}>IMAGEN LISTA</span>
+                                                                    <img src={activeImage} style={{ width: "20px", height: "20px", borderRadius: "50%", objectFit: "cover", border: "1px solid var(--accent-turquoise)" }} />
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    <div style={{ display: "flex", gap: "15px", alignItems: 'center' }}>
+                                                        <div style={{ position: 'relative' }}>
+                                                            <input
+                                                                type="text"
+                                                                placeholder="INSTRUCCIONES EXTRA (OPCIONAL)..."
+                                                                value={marketingAiContext}
+                                                                onChange={(e) => setMarketingAiContext(e.target.value)}
+                                                                style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', padding: '15px 20px', borderRadius: '4px', color: 'white', fontSize: '12px', width: '250px', outline: 'none' }}
+                                                            />
+                                                        </div>
+                                                        <div style={{ display: 'flex', gap: '10px' }}>
+                                                            <button
+                                                                onClick={handleGenerateMarketingAI}
+                                                                disabled={isGeneratingAI || (!selectedProduct && !activeImage)}
+                                                                style={{ background: "rgba(0,212,189,0.1)", border: '1px solid var(--accent-turquoise)', color: "var(--accent-turquoise)", padding: "15px 40px", borderRadius: "4px", fontSize: "14px", fontWeight: "900", cursor: "pointer", textTransform: "uppercase", display: 'flex', alignItems: 'center', gap: '12px', transition: 'all 0.3s', boxShadow: '0 0 20px rgba(0, 212, 189, 0.1)' }}
+                                                                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(0,212,189,0.2)'}
+                                                                onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(0,212,189,0.1)'}
+                                                            >
+                                                                {isGeneratingAI ? <Loader2 className="animate-spin" size={18} /> : <Sparkles size={18} />}
+                                                                {isGeneratingAI ? "GENERANDO..." : "GEMINI"}
+                                                            </button>
+                                                        </div>
                                                         <button
                                                             onClick={handleSaveMarketingAI}
                                                             disabled={!generatedMarketing || isSaving}
-                                                            style={{ background: "var(--accent-gold)", color: "black", padding: "15px 30px", borderRadius: "4px", fontSize: "12px", fontWeight: "900", cursor: "pointer", textTransform: "uppercase" }}
+                                                            style={{ background: "var(--accent-gold)", color: "black", padding: "15px 30px", borderRadius: "4px", fontSize: "11px", fontWeight: "900", cursor: "pointer", textTransform: "uppercase" }}
                                                         >
                                                             {isSaving ? "GUARDANDO..." : "GUARDAR Y ENVIAR"}
                                                         </button>
@@ -2391,16 +2970,22 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                                                         </div>
                                                         <div style={{ background: "#fff", padding: "40px", borderRadius: "8px", overflowY: "auto", maxHeight: "600px", border: '1px solid #333' }}>
                                                             <iframe
-                                                                srcDoc={generatedMarketing.html}
+                                                                srcDoc={generatedMarketing.html.replace('IMAGE_URL_PLACEHOLDER', activeImage || catalogViewerImage || (selectedProduct?.images?.[0] || ''))}
                                                                 style={{ width: "100%", height: "100%", minHeight: "600px", border: "none" }}
                                                                 title="Marketing Preview"
                                                             />
                                                         </div>
                                                     </div>
                                                 ) : (
-                                                    <div style={{ height: "400px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", opacity: 0.2, border: "2px dashed #444", borderRadius: "12px" }}>
-                                                        <Sparkles size={60} />
-                                                        <p style={{ marginTop: "20px", letterSpacing: "2px", color: "#666" }}>SELECCIONA UN PRODUCTO Y PULSA "GENERAR"</p>
+                                                    <div style={{ height: "400px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", opacity: activeImage ? 1 : 0.2, border: "2px dashed #444", borderRadius: "12px", overflow: "hidden" }}>
+                                                        {activeImage ? (
+                                                            <img src={activeImage} style={{ maxWidth: '80%', maxHeight: '300px', objectFit: 'contain', borderRadius: '4px', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }} />
+                                                        ) : (
+                                                            <Sparkles size={60} />
+                                                        )}
+                                                        <p style={{ marginTop: "20px", letterSpacing: "2px", color: activeImage ? "var(--accent-turquoise)" : "#666", fontWeight: activeImage ? "700" : "400" }}>
+                                                            {activeImage ? "IMAGEN RECIBIDA: PULSA 'GENERAR'" : "SELECCIONA UN PRODUCTO PARA GENERAR CONTENIDO"}
+                                                        </p>
                                                     </div>
                                                 )}
                                             </div>
@@ -2412,9 +2997,9 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
 
                         </div>
                     </motion.div>
-                </motion.div>
+                </motion.div >
             )
             }
-        </AnimatePresence>
+        </AnimatePresence >
     );
 }
