@@ -295,7 +295,7 @@ export default function Home() {
   const heroContent = content?.hero || { title1: 'ECOMOVING', cta_text: 'EXPLORAR', cta_link: '#' };
 
   return (
-    <main style={{ backgroundColor: '#050505', color: 'white', minHeight: '100vh', fontFamily: 'var(--font-body)' }}>
+    <main style={{ backgroundColor: 'var(--eco-bg-primary)', color: 'white', minHeight: '100vh', fontFamily: 'var(--font-body)' }}>
       <motion.div
         style={{
           position: 'fixed', top: 0, left: 0, right: 0, height: '4px',
@@ -386,14 +386,14 @@ export default function Home() {
       </section>
 
       {/* --- PREMIUM COLLECTION (BENTO VIP) --- */}
-      <div style={{ background: '#050505' }}> {/* Wrapper para asegurar que el fondo se funda perfectamente con page.tsx que tiene #050505 */}
+      <div style={{ background: 'var(--eco-bg-primary)' }}> {/* Wrapper para asegurar que el fondo se funda perfectamente con page.tsx que tiene #0A0A0A */}
         <PremiumCollection />
       </div>
 
       {/* --- INFINITE GRID CANVAS (24 COLUMNS) --- */}
       <section id="infinite-canvas" style={{
         minHeight: '100vh',
-        background: '#050505', // Match con el fondo de la página
+        background: 'var(--eco-bg-primary)', // Match con el fondo de la página
         position: 'relative',
         padding: '0'
       }}>
