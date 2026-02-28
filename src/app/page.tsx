@@ -291,8 +291,24 @@ export default function Home() {
     return <ProjectLauncher onSelect={(p) => setSelectedProject(p)} />;
   }
 
-  // Fallback seguro para Hero si content no está listo
   const heroContent = content?.hero || { title1: 'ECOMOVING', cta_text: 'EXPLORAR', cta_link: '#' };
+
+  // 1. Buscar la sección maestra (Soporte Live Preview)
+  const source = previewSections || content?.sections;
+  let masterSection: any;
+
+  if (Array.isArray(source)) {
+    masterSection = source.find(s => s.id === 'infinite_grid');
+    if (!masterSection && source.length === 1) masterSection = source[0];
+  } else {
+    masterSection = (source as any)?.['infinite_grid'];
+    if (!masterSection && source) {
+      const values = Object.values(source);
+      if (values.length === 1) masterSection = values[0];
+    }
+  }
+
+  const hasBlocks = masterSection && masterSection.blocks && masterSection.blocks.length > 0;
 
   return (
     <main style={{ backgroundColor: 'var(--eco-bg-primary)', color: 'white', minHeight: '100vh', fontFamily: 'var(--font-body)' }}>
@@ -392,7 +408,8 @@ export default function Home() {
 
       {/* --- INFINITE GRID CANVAS (24 COLUMNS) --- */}
       <section id="infinite-canvas" style={{
-        minHeight: '100vh',
+        minHeight: hasBlocks ? '100vh' : '0', // Ocultamos la franja negra si no hay bloques
+        display: hasBlocks ? 'block' : 'none', // Directamente lo desaparecemos visualmente
         background: 'var(--eco-bg-primary)', // Match con el fondo de la página
         position: 'relative',
         padding: '0'
@@ -417,51 +434,22 @@ export default function Home() {
           gridAutoRows: '15px', // Micro-resolución de 15px para control total
           gridAutoFlow: 'dense',
           gap: '0px',
-          padding: '20px', // Aire de seguridad para bordes y curvas
+          padding: hasBlocks ? '20px' : '0',
           width: '100%',
           maxWidth: '100%',
           backgroundColor: 'var(--eco-bg-primary)',
           overflow: 'visible'
         }}>
 
-          {(() => {
-            // 1. Buscar la sección maestra (Soporte Live Preview)
-            const source = previewSections || content?.sections;
-            let masterSection: any;
-
-            if (Array.isArray(source)) {
-              masterSection = source.find(s => s.id === 'infinite_grid');
-              // Fallback array único
-              if (!masterSection && source.length === 1) masterSection = source[0];
-            } else {
-              masterSection = (source as any)?.['infinite_grid'];
-              // Fallback objeto único
-              if (!masterSection && source) {
-                const values = Object.values(source);
-                if (values.length === 1) masterSection = values[0];
-              }
-            }
-
-            if (masterSection && masterSection.blocks && masterSection.blocks.length > 0) {
-              return masterSection.blocks.map((block: any) => (
-                <BentoBlock
-                  key={block.id}
-                  block={block}
-                  designMode={designMode}
-                  assets={assets}
-                  handleDrop={(e: any) => handleDrop(e, block.id)} // Pasamos el handleDrop real
-                />
-              ));
-            } else {
-              // Placeholder si está vacío
-              return (
-                <div style={{
-                  gridColumn: '1 / -1',
-                  display: 'none' // Lo ocultamos para darle prioridad al Premium Collection
-                }} />
-              );
-            }
-          })()}
+          {hasBlocks && masterSection.blocks.map((block: any) => (
+            <BentoBlock
+              key={block.id}
+              block={block}
+              designMode={designMode}
+              assets={assets}
+              handleDrop={(e: any) => handleDrop(e, block.id)} // Pasamos el handleDrop real
+            />
+          ))}
 
         </div>
       </section>
