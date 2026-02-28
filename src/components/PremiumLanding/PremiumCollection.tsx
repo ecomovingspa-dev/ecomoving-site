@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useEffect, useState, useRef } from 'react';
 import { motion, useScroll, useTransform, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/lib/supabase';
@@ -41,9 +43,9 @@ export default function PremiumCollection() {
         }
     };
 
-    if (loading) return null; // O un skeleton loader premium si prefieres
-
-    if (premiumProducts.length === 0) return null; // No mostrar si no hay VIPs marcados
+    if (loading || premiumProducts.length === 0) {
+        return <section ref={containerRef} style={{ display: 'none' }} />;
+    }
 
     return (
         <motion.section
