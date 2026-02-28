@@ -2618,6 +2618,21 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                                                                     </div>
                                                                 )}
                                                             </div>
+
+                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '15px', backgroundColor: selectedProduct?.is_premium ? 'rgba(212, 175, 55, 0.1)' : 'rgba(255,255,255,0.02)', border: `1px solid ${selectedProduct?.is_premium ? 'var(--accent-gold)' : 'rgba(255,255,255,0.05)'}`, borderRadius: '4px', transition: 'all 0.3s' }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                                    <Star size={16} color={selectedProduct?.is_premium ? 'var(--accent-gold)' : '#555'} fill={selectedProduct?.is_premium ? 'var(--accent-gold)' : 'none'} />
+                                                                    <span style={{ fontSize: '11px', color: selectedProduct?.is_premium ? 'var(--accent-gold)' : '#aaa', fontWeight: '800', letterSpacing: '2px', textTransform: 'uppercase' }}>
+                                                                        ⭐ DESTACAR EN LANDING (PREMIUM)
+                                                                    </span>
+                                                                </div>
+                                                                <button
+                                                                    onClick={() => handleUpdateProduct({ is_premium: !selectedProduct?.is_premium })}
+                                                                    style={{ padding: '6px 12px', fontSize: '9px', fontWeight: '900', letterSpacing: '1px', cursor: 'pointer', borderRadius: '2px', border: `1px solid ${selectedProduct?.is_premium ? 'var(--accent-gold)' : '#555'}`, backgroundColor: selectedProduct?.is_premium ? 'var(--accent-gold)' : 'transparent', color: selectedProduct?.is_premium ? 'black' : '#555', transition: 'all 0.2s' }}
+                                                                >
+                                                                    {selectedProduct?.is_premium ? 'ACTIVADO' : 'DESACTIVADO'}
+                                                                </button>
+                                                            </div>
                                                             <div style={{ marginTop: '30px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '20px' }}>
                                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
                                                                     <label style={{ fontSize: "11px", color: "var(--accent-gold)", fontWeight: "900", letterSpacing: "3px", textTransform: "uppercase" }}>TÍTULO DEL PRODUCTO</label>
