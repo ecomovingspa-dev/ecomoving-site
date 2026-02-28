@@ -12,14 +12,6 @@ export default function PremiumCollection() {
     const containerRef = useRef<HTMLDivElement>(null);
     const router = useRouter();
 
-    const { scrollYProgress } = useScroll({
-        target: containerRef,
-        offset: ["start end", "end start"]
-    });
-
-    const translateY = useTransform(scrollYProgress, [0, 1], [100, -100]);
-    const opacity = useTransform(scrollYProgress, [0, 0.2, 0.8, 1], [0, 1, 1, 0]);
-
     useEffect(() => {
         fetchPremiumProducts();
     }, []);
@@ -48,9 +40,8 @@ export default function PremiumCollection() {
     }
 
     return (
-        <motion.section
+        <section
             ref={containerRef}
-            style={{ y: translateY, opacity }}
             className="premium-collection-wrapper"
         >
             <div className="premium-header">
@@ -139,7 +130,7 @@ export default function PremiumCollection() {
                     grid-auto-rows: minmax(100px, auto);
                 }
             `}</style>
-        </motion.section>
+        </section>
     );
 }
 
