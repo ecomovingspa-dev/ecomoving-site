@@ -386,12 +386,14 @@ export default function Home() {
       </section>
 
       {/* --- PREMIUM COLLECTION (BENTO VIP) --- */}
-      <PremiumCollection />
+      <div style={{ background: '#050505' }}> {/* Wrapper para asegurar que el fondo se funda perfectamente con page.tsx que tiene #050505 */}
+        <PremiumCollection />
+      </div>
 
       {/* --- INFINITE GRID CANVAS (24 COLUMNS) --- */}
       <section id="infinite-canvas" style={{
         minHeight: '100vh',
-        background: '#0a0a0a',
+        background: '#050505', // Match con el fondo de la página
         position: 'relative',
         padding: '0'
       }}>
