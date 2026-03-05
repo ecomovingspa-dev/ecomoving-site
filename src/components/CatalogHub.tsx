@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { generateMarketingAI, generateWebAI, generateSEOFilenameAI, MarketingContent, WebSectionContent, getMarketingHTMLTemplate } from '@/lib/gemini';
 import { useWebContent } from '@/hooks/useWebContent';
 import { fetchDriveItems, DriveItem } from '@/services/driveService';
+import MarketingBentoFactory from './MarketingBentoFactory';
 
 interface PendingProduct {
     id: string;
@@ -40,13 +41,7 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
     const [customCategories, setCustomCategories] = useState<string[]>(['ECOLÓGICOS', 'BOTELLAS, MUGS Y TAZAS', 'CUADERNOS, LIBRETAS Y MEMO SET', 'MOCHILAS, BOLSOS Y MORRALES', 'BOLÍGRAFOS', 'ACCESORIOS']);
     const [isAddingCategory, setIsAddingCategory] = useState(false);
     const [newCategoryName, setNewCategoryName] = useState('');
-    const [isAddingNew, setIsAddingNew] = useState(false);
-    const [newProductForm, setNewProductForm] = useState<Partial<PendingProduct>>({
-        nombre: '',
-        descripcion: '',
-        images: [],
-        technical_specs: []
-    });
+
 
     const handleAddCategory = () => {
         if (!newCategoryName.trim()) return;
@@ -62,13 +57,16 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
     const [updatedProductIds, setUpdatedProductIds] = useState<Set<string>>(new Set());
     const [insumoProductSearch, setInsumoProductSearch] = useState('');
     const [insumoSearchResults, setInsumoSearchResults] = useState<PendingProduct[]>([]);
-    const [activeImage, setActiveImage] = useState<string | null>(null); // GLOBAL: Used for Hero/Marketing tabs preview
+    const [activeImage, setActiveImage] = useState<string | null>(null); // GLOBAL: Used for Hero tab preview
+    const [marketingImage, setMarketingImage] = useState<string | null>(null); // EXCLUSIVO: Tab Marketing
     const [pendingFiles, setPendingFiles] = useState<Record<string, File>>({});
     const [isSaving, setIsSaving] = useState(false);
     const [isGeneratingSEO, setIsGeneratingSEO] = useState(false);
     const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
     const [activeTab, setActiveTab] = useState<'insumo' | 'catalog' | 'gallery' | 'hero' | 'marketing'>('insumo');
-    const [marketingAiContext, setMarketingAiContext] = useState('');
+    const [marketingSkuInput, setMarketingSkuInput] = useState('');
+    const [marketingProductContext, setMarketingProductContext] = useState<{ nombre: string; caracteristicas: string[] } | null>(null);
+    const [isSearchingSku, setIsSearchingSku] = useState(false);
     const [insumoFile, setInsumoFile] = useState<File | null>(null);
     const [insumoFiles, setInsumoFiles] = useState<File[]>([]);
     const [insumoPreview, setInsumoPreview] = useState<string | null>(null);
@@ -477,9 +475,19 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                 // Nota: El flujo de marketing parece estar diseñado para una sola imagen "preparada"
                 if (insumoDestination === 'marketing' && i === 0) {
                     const localUrl = URL.createObjectURL(blob);
-                    setActiveImage(localUrl);
+                    // @seo_mkt: Imagen EXCLUSIVA del tab Marketing — no contamina Hero ni Grilla
+                    setMarketingImage(localUrl);
+                    setActiveImage(null); // Asegurar que Hero/Grilla no la vean
+                    // Limpiar insumo
+                    insumoPreviews.forEach(url => URL.revokeObjectURL(url));
+                    setInsumoFile(null);
+                    setInsumoFiles([]);
+                    setInsumoPreview(null);
+                    setInsumoPreviews([]);
+                    setInsumoOptimizedBlob(null);
+                    setInsumoOptimizedBlobs([]);
+                    setInsumoSavingPercentage(0);
                     setActiveTab('marketing');
-                    alert(`Imagen preparada para MARKETING`);
                     setIsRoutingInsumo(false);
                     return;
                 }
@@ -511,7 +519,6 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                         : [...selectedProduct.images, ...publicUrls];
 
                     handleUpdateProduct({ images: updatedImages });
-                    setIsAddingNew(false);
                     setCatalogViewerImage(publicUrls[0]);
                     setUpdatedProductIds(prev => new Set(prev).add(selectedProduct.id));
                     setActiveTab('catalog');
@@ -519,11 +526,19 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                 } else {
                     // Preparar el form de "Nuevo Producto"
                     setCatalogViewerImage(publicUrls[0]);
-                    handleOpenNew();
-                    setNewProductForm(prev => ({
-                        ...prev,
-                        images: publicUrls // Pasamos todas las URLs generadas
-                    }));
+                    setSelectedProduct({
+                        id: `new-${Date.now()}`,
+                        nombre: '',
+                        descripcion: '',
+                        images: publicUrls,
+                        wholesaler: 'Stocksur',
+                        category: 'Mug',
+                        sku_externo: `MAN-${Date.now().toString().slice(-6)}`,
+                        is_premium: false,
+                        technical_specs: [],
+                        status: 'PENDING',
+                        found_at: new Date().toISOString()
+                    });
                     setActiveManualImage(publicUrls[0]);
                     setActiveTab('catalog');
                 }
@@ -782,79 +797,116 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
 
 
     const handlePublish = async () => {
-        if (!selectedProduct || !catalogViewerImage) return;
+        if (!selectedProduct || !selectedProduct.nombre || !catalogViewerImage) {
+            alert('El Título y al menos una imagen son obligatorios para guardar.');
+            return;
+        }
 
         setIsSaving(true);
-        let finalMainImage = catalogViewerImage;
+        let finalMainImage = '';
+        const finalImageUrls: string[] = [];
 
         try {
-            // OPTIMIZACIÓN DE IMAGEN
-            const isExternal = !catalogViewerImage.includes('supabase.co');
-            const isBlob = catalogViewerImage.startsWith('blob:');
+            // OPTIMIZACIÓN DE TODAS LAS IMÁGENES
+            const imagesToProcess = selectedProduct.images || [];
+            if (catalogViewerImage && !imagesToProcess.includes(catalogViewerImage)) {
+                imagesToProcess.unshift(catalogViewerImage);
+            }
 
-            if (isExternal || isBlob) {
-                try {
-                    let blob: Blob;
-                    if (isBlob) {
-                        const file = pendingFiles[catalogViewerImage];
-                        if (file) {
-                            const result = await optimizeImage(file);
-                            blob = result.blob;
+            for (const imgPath of imagesToProcess) {
+                const isExternal = !imgPath.includes('supabase.co');
+                const isBlob = imgPath.startsWith('blob:');
+
+                if (isExternal || isBlob) {
+                    try {
+                        let blob: Blob;
+                        if (isBlob) {
+                            const file = pendingFiles[imgPath];
+                            if (file) {
+                                const result = await optimizeImage(file);
+                                blob = result.blob;
+                            } else {
+                                const res = await fetch(imgPath);
+                                const originalBlob = await res.blob();
+                                const result = await optimizeImage(new File([originalBlob], 'image.jpg', { type: originalBlob.type }));
+                                blob = result.blob;
+                            }
                         } else {
-                            const res = await fetch(catalogViewerImage);
+                            const res = await fetch(imgPath);
+                            if (!res.ok) throw new Error('No se pudo descargar la imagen externa');
                             const originalBlob = await res.blob();
                             const result = await optimizeImage(new File([originalBlob], 'image.jpg', { type: originalBlob.type }));
                             blob = result.blob;
                         }
-                    } else {
-                        const res = await fetch(catalogViewerImage);
-                        if (!res.ok) throw new Error('No se pudo descargar la imagen externa');
-                        const originalBlob = await res.blob();
-                        const result = await optimizeImage(new File([originalBlob], 'image.jpg', { type: originalBlob.type }));
-                        blob = result.blob;
+
+                        const fileName = `PROD-${selectedProduct.sku_externo}-${Date.now()}-${Math.random().toString(36).substring(2, 8)}.webp`;
+                        const filePath = `catalogo/${fileName}`;
+
+                        const { error: uploadError } = await supabase.storage
+                            .from('imagenes-marketing')
+                            .upload(filePath, blob, { contentType: 'image/webp' });
+
+                        if (uploadError) throw uploadError;
+
+                        const { data: { publicUrl } } = supabase.storage
+                            .from('imagenes-marketing')
+                            .getPublicUrl(filePath);
+
+                        finalImageUrls.push(publicUrl);
+                        if (imgPath === catalogViewerImage) finalMainImage = publicUrl;
+                    } catch (optError: any) {
+                        console.error('Fallo la optimización automática para', imgPath, optError);
+                        // Si falla pero es blob, no podemos enviarla a Supabase DB porque es inválida
+                        if (!isBlob) {
+                            finalImageUrls.push(imgPath);
+                            if (imgPath === catalogViewerImage) finalMainImage = imgPath;
+                        }
                     }
-
-                    const fileName = `PROD-${selectedProduct.sku_externo}-${Date.now()}.webp`;
-                    const filePath = `catalogo/${fileName}`;
-
-                    const { error: uploadError } = await supabase.storage
-                        .from('imagenes-marketing')
-                        .upload(filePath, blob, { contentType: 'image/webp' });
-
-                    if (uploadError) throw uploadError;
-
-                    const { data: { publicUrl } } = supabase.storage
-                        .from('imagenes-marketing')
-                        .getPublicUrl(filePath);
-
-                    finalMainImage = publicUrl;
-                } catch (optError) {
-                    console.error('Fallo la optimización automática:', optError);
+                } else {
+                    finalImageUrls.push(imgPath);
+                    if (imgPath === catalogViewerImage) finalMainImage = imgPath;
                 }
             }
 
-            // 1. Marcar como aprobado en la tabla 'productos' con TODOS los metadatos actualizados
-            const { error } = await supabase
-                .from('productos')
-                .update({
-                    status: 'approved',
-                    wholesaler: selectedProduct.wholesaler,
-                    sku_externo: selectedProduct.sku_externo,
-                    nombre: selectedProduct.nombre,
-                    descripcion: selectedProduct.descripcion,
-                    categoria: (selectedProduct.category || 'OTRO').trim().toUpperCase(),
-                    features: selectedProduct.technical_specs,
-                    is_premium: selectedProduct.is_premium,
-                    seo_title: selectedProduct.seo_title,
-                    seo_keywords: selectedProduct.seo_keywords,
-                    seo_description: selectedProduct.seo_description,
-                    for_marketing: selectedProduct.for_marketing,
-                    imagen_principal: finalMainImage,
-                    imagenes_galeria: [finalMainImage, ...selectedProduct.images.filter(i => i !== catalogViewerImage)]
-                })
-                .eq('id', selectedProduct.id);
+            // Garantizar que siempre haya una finalMainImage
+            if (!finalMainImage && finalImageUrls.length > 0) finalMainImage = finalImageUrls[0];
 
-            if (error) throw error;
+            // 1. Marcar como aprobado en la tabla 'productos' con TODOS los metadatos actualizados
+            const productData = {
+                status: 'approved',
+                wholesaler: selectedProduct.wholesaler || 'Manual',
+                sku_externo: selectedProduct.sku_externo || `MAN-${Date.now().toString().slice(-6)}`,
+                nombre: (selectedProduct.nombre || '').trim(),
+                descripcion: (selectedProduct.descripcion || '').trim(),
+                categoria: (selectedProduct.category || 'OTRO').trim().toUpperCase(),
+                features: selectedProduct.technical_specs || [],
+                is_premium: selectedProduct.is_premium || false,
+                seo_title: selectedProduct.seo_title || '',
+                seo_keywords: selectedProduct.seo_keywords || '',
+                seo_description: selectedProduct.seo_description || '',
+                for_marketing: selectedProduct.for_marketing || false,
+                imagen_principal: finalMainImage || '',
+                imagenes_galeria: [finalMainImage, ...finalImageUrls.filter((i: string) => i !== finalMainImage)].filter(Boolean)
+            };
+
+            if (selectedProduct.id.startsWith('new-')) {
+                const newId = crypto.randomUUID();
+                const insertData = {
+                    ...productData,
+                    id: newId,
+                    created_at: new Date().toISOString()
+                };
+                const { error } = await supabase
+                    .from('productos')
+                    .insert([insertData]);
+                if (error) throw error;
+            } else {
+                const { error } = await supabase
+                    .from('productos')
+                    .update(productData)
+                    .eq('id', selectedProduct.id);
+                if (error) throw error;
+            }
 
             // Actualizar UI
             fetchPendingProducts(); // Recargar para limpiar
@@ -862,148 +914,14 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
             setCatalogViewerImage(null);
 
             alert('¡Producto Publicado y Optimizado en el catálogo vivo!');
-        } catch (error) {
-            console.error('Error al publicar:', error);
-            alert('Error al publicar el producto');
-        } finally {
-            setIsSaving(false);
-        }
-    };
-
-    const handleCreateManual = async () => {
-        // Validamos Título e Imígenes
-        if (!newProductForm.descripcion || !newProductForm.images || newProductForm.images.length === 0) {
-            alert('El Título y al menos una imagen son obligatorios para guardar.');
-            return;
-        }
-
-        setIsSaving(true);
-        setLoading(true);
-
-        try {
-            const finalImageUrls: string[] = [];
-            let mainImageUrl = '';
-
-            // Procesar cada imagen: si es local (blob:), optimizar y subir. Si ya es URL de Supabase, mantener.
-            for (const imgPath of (newProductForm.images || [])) {
-                if (imgPath.startsWith('blob:')) {
-                    const file = pendingFiles[imgPath];
-                    if (file) {
-                        try {
-                            const { blob: optimizedBlob } = await optimizeImage(file);
-                            const fileName = `${Math.random()}-${Date.now()}.webp`;
-                            const filePath = `catalogo/${fileName}`;
-
-                            const { error: uploadError } = await supabase.storage
-                                .from('imagenes-marketing')
-                                .upload(filePath, optimizedBlob, { contentType: 'image/webp' });
-
-                            if (uploadError) throw uploadError;
-
-                            const { data: { publicUrl } } = supabase.storage
-                                .from('imagenes-marketing')
-                                .getPublicUrl(filePath);
-
-                            finalImageUrls.push(publicUrl);
-                            if (imgPath === activeManualImage) mainImageUrl = publicUrl;
-                        } catch (err) {
-                            console.error('Error procesando imagen local:', err);
-                        }
-                    }
-                } else {
-                    finalImageUrls.push(imgPath);
-                    if (imgPath === activeManualImage) mainImageUrl = imgPath;
-                }
-            }
-
-            // Reordenar para que la imagen seleccionada como principal sea la primera
-            const orderedImages = mainImageUrl
-                ? [mainImageUrl, ...finalImageUrls.filter(url => url !== mainImageUrl)]
-                : finalImageUrls;
-
-            // Construir el objeto de inserción explícitamente para la tabla 'productos'
-            const productToInsert = {
-                wholesaler: newProductForm.wholesaler || 'Manual',
-                sku_externo: newProductForm.sku_externo || `MAN-${Date.now().toString().slice(-6)}`,
-                nombre: (newProductForm.nombre || newProductForm.descripcion || '').trim(),
-                descripcion: (newProductForm.descripcion || '').trim(),
-                categoria: (newProductForm.category || 'OTRO').trim().toUpperCase(),
-                imagen_principal: orderedImages[0] || '',
-                imagenes_galeria: orderedImages,
-                features: newProductForm.technical_specs || [],
-                is_premium: newProductForm.is_premium || false,
-                seo_title: newProductForm.seo_title || '',
-                seo_keywords: newProductForm.seo_keywords || '',
-                seo_description: newProductForm.seo_description || '',
-                for_marketing: newProductForm.for_marketing || false,
-                status: 'approved',
-                created_at: new Date().toISOString()
-            };
-
-            // Protocolo @adn: Verificación manual de existencia para evitar error de ON CONFLICT si no hay índice único
-            const { data: existingProduct } = await supabase
-                .from('productos')
-                .select('id')
-                .eq('sku_externo', productToInsert.sku_externo)
-                .single();
-
-            let result;
-            if (existingProduct) {
-                result = await supabase
-                    .from('productos')
-                    .update(productToInsert)
-                    .eq('id', existingProduct.id)
-                    .select();
-            } else {
-                result = await supabase
-                    .from('productos')
-                    .insert([productToInsert])
-                    .select();
-            }
-
-            const { data, error } = result;
-
-            if (error) {
-                console.error('Error de Supabase:', error);
-                throw new Error(error.message);
-            }
-
-            if (data && data.length > 0) {
-                const formattedProduct = mapProductFromDB(data[0]);
-                setPendingProducts(prev => {
-                    const exists = prev.find(p => p.id === formattedProduct.id);
-                    if (exists) return prev.map(p => p.id === formattedProduct.id ? formattedProduct : p);
-                    return [formattedProduct, ...prev];
-                });
-                setSelectedProduct(formattedProduct);
-                setCatalogViewerImage(formattedProduct.images[0]);
-                setUpdatedProductIds(prev => new Set(prev).add(formattedProduct.id));
-                setIsAddingNew(false);
-
-                // Limpiar ObjectURLs para evitar fugas de memoria
-                Object.keys(pendingFiles).forEach(url => URL.revokeObjectURL(url));
-                setPendingFiles({});
-
-                setNewProductForm({
-                    nombre: '',
-                    descripcion: '',
-                    images: [],
-                    wholesaler: 'Manual',
-                    category: 'BOTELLA, MUG Y TAZA',
-                    sku_externo: 'MAN-' + Date.now().toString().slice(-6),
-                    is_premium: false,
-                    technical_specs: []
-                });
-                alert(existingProduct ? '¡Producto actualizado exitosamente!' : '¡Producto creado exitosamente!');
-            }
         } catch (error: any) {
-            console.error('Error al crear producto:', error);
-            alert(`Error al crear el producto: ${error.message || 'Error desconocido'}`);
+            console.error('Error al publicar:', error);
+            alert(`Error al publicar el producto: ${error.message || 'Error desconocido'}`);
         } finally {
             setIsSaving(false);
-            setLoading(false);
         }
     };
+
 
     const optimizeImage = async (
         file: File,
@@ -1095,8 +1013,8 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
 
 
     const handleOpenNew = () => {
-        setIsAddingNew(true);
-        setNewProductForm({
+        const newProduct: PendingProduct = {
+            id: `new-${Date.now()}`,
             nombre: '',
             descripcion: '',
             images: [],
@@ -1104,8 +1022,11 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
             category: 'Mug',
             sku_externo: `MAN-${Date.now().toString().slice(-6)}`,
             is_premium: false,
-            technical_specs: []
-        });
+            technical_specs: [],
+            status: 'PENDING',
+            found_at: new Date().toISOString()
+        };
+        setSelectedProduct(newProduct);
         setActiveManualImage(null);
     };
 
@@ -1208,85 +1129,99 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
         }
     };
 
+    // @seo_mkt: Búsqueda de producto por SKU — busca en sku_externo e ilike en nombre
+    const handleSkuSearch = async (sku: string) => {
+        const skuClean = sku.trim().toUpperCase();
+        if (!skuClean) {
+            setMarketingProductContext(null);
+            return;
+        }
+        setIsSearchingSku(true);
+        try {
+            // Búsqueda directa por sku_externo (case-insensitive) o por nombre
+            const { data: results } = await supabase
+                .from('productos')
+                .select('nombre, sku_externo, caracteristicas, features')
+                .or(`sku_externo.ilike.${skuClean},nombre.ilike.%${skuClean}%`)
+                .limit(1);
+
+            const found = results && results.length > 0 ? results[0] : null;
+
+            if (!found) {
+                setMarketingProductContext(null);
+            } else {
+                const specs: string[] = Array.isArray(found.caracteristicas)
+                    ? found.caracteristicas.filter((s: any) => typeof s === 'string' && s.trim())
+                    : typeof found.caracteristicas === 'string' && found.caracteristicas.trim()
+                        ? [found.caracteristicas]
+                        : Array.isArray(found.features)
+                            ? found.features.filter((s: any) => typeof s === 'string' && s.trim())
+                            : [];
+                setMarketingProductContext({ nombre: found.nombre, caracteristicas: specs });
+            }
+        } catch (e) {
+            console.error('[SKU_SEARCH]', e);
+            setMarketingProductContext(null);
+        } finally {
+            setIsSearchingSku(false);
+        }
+    };
+
     const handleGenerateMarketingAI = async () => {
-        if (!selectedProduct && !activeImage) {
-            alert('Selecciona un producto o carga una imagen primero');
+        if (!marketingImage) {
+            alert('Primero envía una imagen desde la pestaña INSUMO');
+            return;
+        }
+
+        const skuClean = marketingSkuInput.trim().toUpperCase();
+        if (!skuClean) {
+            alert('Ingresa el SKU del producto para generar contenido de marketing');
             return;
         }
 
         setIsGeneratingAI(true);
-        setAiStatus('⚡ Sincronizando datos técnicos...');
+        setAiStatus('⚡ Consultando base de datos...');
         try {
-            // PROTOCOLO @seo_mkt: Evitar "Leak de Contexto" (Caché de producto anterior)
-            let productForContext = null;
-            const keyword = marketingAiContext?.trim().toLowerCase();
+            // PRIMARY INPUT: columna `caracteristicas` desde Supabase por SKU exacto
+            const { data, error } = await supabase
+                .from('productos')
+                .select('nombre, sku_externo, caracteristicas, features')
+                .eq('sku_externo', skuClean)
+                .single();
 
-            // 1. Si el producto seleccionado coincide con la referencia (o no hay referencia), lo mantenemos
-            if (selectedProduct && (!keyword ||
-                selectedProduct.nombre.toLowerCase().includes(keyword) ||
-                (selectedProduct.category && selectedProduct.category.toLowerCase().includes(keyword)))) {
-                productForContext = selectedProduct;
+            if (error || !data) {
+                throw new Error(`[FATAL_ERROR: DATA_SOURCE_EMPTY] — SKU "${skuClean}" no encontrado en la base de datos`);
             }
 
-            // 2. Si hay una palabra de referencia y no coincide con el actual, buscamos uno mejor
-            if (keyword && keyword.length >= 2) {
-                // Intentamos singularizar (básico: quitar 's' si termina en 's') para mejor match
-                const singularKey = keyword.endsWith('s') ? keyword.slice(0, -1) : keyword;
+            // Normalizar caracteristicas (puede ser array de texto o JSON)
+            const specs: string[] = Array.isArray(data.caracteristicas)
+                ? data.caracteristicas.filter((s: any) => typeof s === 'string' && s.trim())
+                : typeof data.caracteristicas === 'string' && data.caracteristicas.trim()
+                    ? [data.caracteristicas]
+                    : Array.isArray(data.features)
+                        ? data.features.filter((s: any) => typeof s === 'string' && s.trim())
+                        : [];
 
-                const findMatch = (key: string) => pendingProducts.find(p =>
-                    p.nombre.toLowerCase().includes(key) ||
-                    (Array.isArray(p.technical_specs) && p.technical_specs.some((s: any) => String(s).toLowerCase().includes(key))) ||
-                    (p.category && p.category.toLowerCase().includes(key))
-                );
-
-                const match = findMatch(keyword) || (keyword !== singularKey ? findMatch(singularKey) : null);
-
-                if (match) {
-                    productForContext = match;
-                    setSelectedProduct(match);
-                    if (match.images?.[0]) setCatalogViewerImage(match.images[0]);
-                } else {
-                    // Buscar en DB si no está en memoria
-                    const { data: dbMatch } = await supabase
-                        .from('productos')
-                        .select('*')
-                        .or(`nombre.ilike.%${keyword}%,categoria.ilike.%${keyword}%,nombre.ilike.%${singularKey}%,categoria.ilike.%${singularKey}%`)
-                        .limit(1);
-
-                    if (dbMatch && dbMatch.length > 0) {
-                        const mapped = mapProductFromDB(dbMatch[0]);
-                        productForContext = mapped;
-                        setSelectedProduct(mapped);
-                        if (mapped.images?.[0]) setCatalogViewerImage(mapped.images[0]);
-                    } else if (productForContext && keyword && !productForContext.nombre.toLowerCase().includes(singularKey)) {
-                        // Si teníamos uno pero la nueva keyword no tiene NADA que ver, lo limpiamos para evitar el "efecto caché"
-                        productForContext = null;
-                    }
-                }
+            if (specs.length === 0) {
+                throw new Error(`[FATAL_ERROR: DATA_SOURCE_EMPTY] — El producto "${data.nombre}" no tiene características técnicas cargadas`);
             }
 
-            const context = productForContext
-                ? `Producto: ${productForContext.nombre}\nDescripción: ${productForContext.seo_description || productForContext.descripcion}\nSpecs: ${productForContext.technical_specs?.join(', ')}\nContexto Adicional: ${marketingAiContext}`
-                : `Referencia: ${marketingAiContext || 'Analiza la imagen y deduce el producto, creando un copy de marketing atractivo.'}`;
+            // Actualizar el contexto de producto encontrado en UI
+            setMarketingProductContext({ nombre: data.nombre, caracteristicas: specs });
 
-            const imageToUse = activeImage || catalogViewerImage || (selectedProduct?.images?.[0] || null);
+            setAiStatus('🧠 Procesando con @seo_mkt...');
+            const context = `CARACTERISTICAS_TECNICAS:\n${specs.join('\n')}`;
+            const content = await generateMarketingAI(marketingImage, context);
 
-            if (!imageToUse) throw new Error("No hay imagen disponible para generar contenido");
-
-            setAiStatus('🧠 Analizando activos con Gemini...');
-            const content = await generateMarketingAI(imageToUse, context);
-
-            // @seo_mkt: Mantenemos el placeholder en el estado para poder reemplazarlo 
-            // con la URL final real al momento de guardar en Supabase.
             setGeneratedMarketing(content);
-            setAiStatus('✨ Contenido de Marketing generado');
+            setAiStatus('✨ Contenido generado con éxito');
         } catch (err: any) {
-            console.error("[HUB_ERROR] AI Generation failed:", err);
-            setAiStatus('❌ ' + (err.message || 'Error en la IA'));
+            console.error("[SEO_MKT] Error crítico:", err);
+            setAiStatus('❌ ' + (err.message || 'Error'));
             alert(err.message || 'Error al generar contenido');
         } finally {
             setIsGeneratingAI(false);
-            setTimeout(() => setAiStatus(''), 5000);
+            setTimeout(() => setAiStatus(''), 6000);
         }
     };
 
@@ -1301,11 +1236,11 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
     const handleSaveMarketingAI = async () => {
         if (!generatedMarketing) return;
 
-        // Permitimos guardar si hay activeImage O selectedProduct
-        const imageToUse = activeImage || (selectedProduct?.images?.[0] || null);
+        // @seo_mkt: Usar marketingImage exclusiva
+        const imageToUse = marketingImage || null;
 
         if (!imageToUse) {
-            alert("No hay imagen para guardar");
+            alert("No hay imagen de marketing. Envía una imagen desde Insumo primero.");
             return;
         }
 
@@ -1391,7 +1326,9 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
             // Si era un blob, liberamos memoria
             if (imageToUse && imageToUse.startsWith('blob:')) URL.revokeObjectURL(imageToUse);
             setActiveImage(null); // Protocolo @constructor: Limpiar tras guardar
-            setMarketingAiContext(''); // Limpia también el contexto de IA
+            setMarketingImage(null); // @seo_mkt: Limpiar imagen marketing post-guardado
+            setMarketingSkuInput('');
+            setMarketingProductContext(null);
         } catch (err: any) {
             console.error(err);
             alert('Error al guardar marketing: ' + err.message);
@@ -2073,6 +2010,29 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                                             onChange={(e) => setSearch(e.target.value)}
                                             style={{ width: '100%', padding: '18px 25px 18px 65px', backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '2px', color: 'white', fontSize: '17px', outline: 'none', letterSpacing: '1px', fontFamily: 'var(--font-body)' }}
                                         />
+                                        {search.length > 0 && filteredProducts.length > 0 && (
+                                            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#111', border: '1px solid #333', borderRadius: '4px', zIndex: 100, marginTop: '5px', boxShadow: '0 10px 40px rgba(0,0,0,0.8)', maxHeight: '300px', overflowY: 'auto' }} className="custom-scroll">
+                                                {filteredProducts.map(p => (
+                                                    <div
+                                                        key={p.id}
+                                                        onClick={() => {
+                                                            setSelectedProduct(p);
+                                                            setCatalogViewerImage(p.images[0]);
+                                                            setSearch(''); // Limpiar búsqueda al seleccionar
+                                                        }}
+                                                        style={{ padding: '15px 20px', borderBottom: '1px solid rgba(255,255,255,0.05)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'}
+                                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                                    >
+                                                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                            <span style={{ fontSize: '13px', color: 'white', fontWeight: '700' }}>{p.nombre}</span>
+                                                            <span style={{ fontSize: '10px', color: '#666' }}>{p.sku_externo} - {p.category || 'SIN CATEGORÍA'}</span>
+                                                        </div>
+                                                        {selectedProduct?.id === p.id && <Check size={16} color="var(--accent-turquoise)" />}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -2087,358 +2047,7 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
 
                                     {/* Right Detail */}
                                     <div className="custom-scroll" style={{ padding: '30px 60px', overflowY: 'auto', backgroundColor: '#050505' }}>
-                                        {isAddingNew ? (
-                                            <div style={{ display: 'flex', flexDirection: 'column', height: '100%', maxWidth: '1600px', margin: '0 auto', width: '100%' }}>
-                                                <div style={{ height: '20px' }} /> {/* Spacer */}
-
-                                                <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr 1fr', gap: '60px', flex: 1 }}>
-                                                    {/* Columna Izquierda: Visual y Biblioteca (Reducida) */}
-                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
-                                                        {/* Hero Viewer Principal */}
-                                                        <div>
-                                                            <div style={{
-                                                                width: '100%',
-                                                                height: '35vh',
-                                                                backgroundColor: '#000',
-                                                                borderRadius: '2px',
-                                                                display: 'flex',
-                                                                alignItems: 'center',
-                                                                justifyContent: 'center',
-                                                                overflow: 'hidden',
-                                                                border: '1px solid rgba(255,255,255,0.05)',
-                                                                position: 'relative',
-                                                                boxShadow: '0 30px 60px rgba(0,0,0,0.5)'
-                                                            }}>
-                                                                {activeManualImage ? (
-                                                                    <motion.img
-                                                                        key={activeManualImage}
-                                                                        initial={{ opacity: 0, scale: 0.95 }}
-                                                                        animate={{ opacity: 1, scale: 1 }}
-                                                                        src={activeManualImage}
-                                                                        style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                                                                    />
-                                                                ) : (
-                                                                    <div style={{ textAlign: 'center', opacity: 0.1 }}>
-                                                                        <ImageIcon size={60} color="white" />
-                                                                    </div>
-                                                                )}
-
-                                                                {loading && (
-                                                                    <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '20px', zIndex: 10 }}>
-                                                                        <Loader2 className="animate-spin" size={40} color="var(--accent-turquoise)" />
-                                                                        <span style={{ color: 'var(--accent-turquoise)', fontSize: '10px', fontWeight: '800', letterSpacing: '3px' }}>PROCESANDO...</span>
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Biblioteca de Activos */}
-                                                        <div>
-                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                                                                <label style={{ fontSize: '11px', color: 'var(--accent-gold)', fontWeight: '800', letterSpacing: '3px', textTransform: 'uppercase' }}>BIBLIOTECA DE ACTIVOS</label>
-                                                                <div style={{ display: 'flex', gap: '15px' }}>
-                                                                    <button
-                                                                        onClick={() => {
-                                                                            const input = document.createElement('input');
-                                                                            input.type = 'file';
-                                                                            input.multiple = true;
-                                                                            input.accept = 'image/*';
-                                                                            input.onchange = (e: any) => {
-                                                                                const files = e.target.files;
-                                                                                if (!files) return;
-                                                                                const newImages = [...(newProductForm.images || [])];
-                                                                                const newPendingFiles = { ...pendingFiles };
-                                                                                for (const file of files) {
-                                                                                    const url = URL.createObjectURL(file);
-                                                                                    newImages.push(url);
-                                                                                    newPendingFiles[url] = file;
-                                                                                }
-                                                                                setNewProductForm({ ...newProductForm, images: newImages });
-                                                                                setPendingFiles(newPendingFiles);
-                                                                                if (!activeManualImage && newImages.length > 0) setActiveManualImage(newImages[0]);
-                                                                            };
-                                                                            input.click();
-                                                                        }}
-                                                                        style={{ background: 'none', border: 'none', color: 'var(--accent-turquoise)', fontSize: '10px', fontWeight: '800', cursor: 'pointer', letterSpacing: '1px' }}
-                                                                    >
-                                                                        + LOCAL
-                                                                    </button>
-                                                                    <button
-                                                                        onClick={() => {
-                                                                            const url = prompt('Ingresa la URL de la imagen:');
-                                                                            if (url) {
-                                                                                const currentImages = newProductForm.images || [];
-                                                                                const newImages = [...currentImages, url];
-                                                                                setNewProductForm({ ...newProductForm, images: newImages });
-                                                                                if (!activeManualImage) setActiveManualImage(url);
-                                                                            }
-                                                                        }}
-                                                                        style={{ background: 'none', border: 'none', color: 'var(--accent-turquoise)', fontSize: '10px', fontWeight: '800', cursor: 'pointer', letterSpacing: '1px' }}
-                                                                    >
-                                                                        + URL
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-
-                                                            {newProductForm.images && newProductForm.images.length > 0 && (
-                                                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px', maxHeight: '300px', overflowY: 'auto', padding: '10px', background: 'rgba(255,255,255,0.01)', borderRadius: '2px', border: '1px solid rgba(255,255,255,0.03)' }} className="custom-scroll">
-                                                                    {newProductForm.images.map((img, i) => (
-                                                                        <div
-                                                                            key={i}
-                                                                            onClick={() => setActiveManualImage(img)}
-                                                                            style={{
-                                                                                position: 'relative',
-                                                                                aspectRatio: '1/1',
-                                                                                borderRadius: '2px',
-                                                                                overflow: 'hidden',
-                                                                                border: `1px solid ${activeManualImage === img ? 'var(--accent-turquoise)' : 'rgba(255,255,255,0.05)'}`,
-                                                                                cursor: 'pointer'
-                                                                            }}
-                                                                        >
-                                                                            <img src={img} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                                                            {i === 0 && (
-                                                                                <div style={{
-                                                                                    position: 'absolute',
-                                                                                    bottom: 0,
-                                                                                    left: 0,
-                                                                                    right: 0,
-                                                                                    background: 'var(--accent-gold)',
-                                                                                    color: 'black',
-                                                                                    fontSize: '7px',
-                                                                                    fontWeight: '900',
-                                                                                    textAlign: 'center',
-                                                                                    padding: '2px 0',
-                                                                                    textTransform: 'uppercase',
-                                                                                    letterSpacing: '1px',
-                                                                                    zIndex: 5
-                                                                                }}>
-                                                                                    PRINCIPAL
-                                                                                </div>
-                                                                            )}
-
-                                                                            {activeManualImage === img && (
-                                                                                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 212, 189, 0.2)', border: '2px solid var(--accent-turquoise)', pointerEvents: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                                                    <Star size={16} color="var(--accent-turquoise)" fill="var(--accent-turquoise)" />
-                                                                                </div>
-                                                                            )}
-
-                                                                            <button
-                                                                                onClick={(e) => {
-                                                                                    e.stopPropagation();
-                                                                                    const remaining = newProductForm.images?.filter((_, idx) => idx !== i) || [];
-                                                                                    setNewProductForm({ ...newProductForm, images: remaining });
-                                                                                    if (activeManualImage === img) setActiveManualImage(remaining[0] || null);
-                                                                                }}
-                                                                                style={{ position: 'absolute', top: '2px', right: '2px', background: 'rgba(239, 68, 68, 0.9)', color: 'white', border: 'none', borderRadius: '50%', width: '18px', height: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 10 }}>
-                                                                                <X size={10} />
-                                                                            </button>
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Columna Derecha: Metadatos + Specs */}
-                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                                                        {/* Fila 1: Mayorista, SKU y Categoría */}
-                                                        <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
-                                                            <div style={{ width: '140px' }}>
-                                                                <label style={{ display: 'block', fontSize: '11px', color: 'var(--accent-gold)', marginBottom: '10px', fontWeight: '800', letterSpacing: '3px', textTransform: 'uppercase' }}>MAYORISTA</label>
-                                                                <input
-                                                                    type="text"
-                                                                    value={newProductForm.wholesaler || ''}
-                                                                    onChange={(e) => setNewProductForm({ ...newProductForm, wholesaler: e.target.value })}
-                                                                    style={{ width: '100%', backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '2px', padding: '15px', color: 'white', fontSize: '15px', outline: 'none' }}
-                                                                />
-                                                            </div>
-                                                            <div style={{ width: '140px' }}>
-                                                                <label style={{ display: 'block', fontSize: '11px', color: 'var(--accent-gold)', marginBottom: '10px', fontWeight: '800', letterSpacing: '3px', textTransform: 'uppercase' }}>CÓDIGO / SKU</label>
-                                                                <input
-                                                                    type="text"
-                                                                    value={newProductForm.sku_externo}
-                                                                    onChange={(e) => setNewProductForm({ ...newProductForm, sku_externo: e.target.value })}
-                                                                    style={{ width: '100%', backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '2px', padding: '15px', color: 'white', fontSize: '15px', outline: 'none' }}
-                                                                />
-                                                            </div>
-                                                            <div style={{ flex: 1 }}>
-                                                                <label style={{ display: 'block', fontSize: '11px', color: 'var(--accent-gold)', marginBottom: '10px', fontWeight: '800', letterSpacing: '3px', textTransform: 'uppercase' }}>CATEGORÍAS (SEPARA CON COMA PARA DOBLE CAT)</label>
-                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                                                    {/* Lista de Categorías Predefinidas */}
-                                                                    <div style={{ position: 'relative', marginBottom: '8px' }}>
-                                                                        <div
-                                                                            onClick={() => setIsCategoryDropdownOpen(!isCategoryDropdownOpen)}
-                                                                            style={{
-                                                                                width: '100%',
-                                                                                padding: '16px 15px',
-                                                                                backgroundColor: 'rgba(255,255,255,0.02)',
-                                                                                border: '1px solid rgba(255,255,255,0.05)',
-                                                                                color: 'white',
-                                                                                fontSize: '11px',
-                                                                                fontWeight: '700',
-                                                                                borderRadius: '4px',
-                                                                                outline: 'none',
-                                                                                textTransform: 'uppercase',
-                                                                                cursor: 'pointer',
-                                                                                height: '48px',
-                                                                                display: 'flex',
-                                                                                justifyContent: 'space-between',
-                                                                                alignItems: 'center',
-                                                                                transition: 'border-color 0.3s'
-                                                                            }}
-                                                                            onMouseEnter={(e) => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'}
-                                                                            onMouseLeave={(e) => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.05)'}
-                                                                        >
-                                                                            <span>{newProductForm.category || 'SELECCIONAR CATEGORÍA...'}</span>
-                                                                            <ChevronRight size={14} style={{ transform: isCategoryDropdownOpen ? 'rotate(-90deg)' : 'rotate(90deg)', transition: 'transform 0.2s', color: 'var(--accent-turquoise)' }} />
-                                                                        </div>
-                                                                        {isCategoryDropdownOpen && (
-                                                                            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: '#050505', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', marginTop: '4px', zIndex: 100, maxHeight: '200px', overflowY: 'auto', boxShadow: '0 10px 40px rgba(0,0,0,0.8)' }} className="custom-scroll">
-                                                                                {customCategories.map(cat => (
-                                                                                    <div
-                                                                                        key={cat}
-                                                                                        onClick={() => {
-                                                                                            setNewProductForm({ ...newProductForm, category: cat });
-                                                                                            setIsCategoryDropdownOpen(false);
-                                                                                        }}
-                                                                                        style={{ padding: '14px 15px', fontSize: '11px', cursor: 'pointer', color: newProductForm.category === cat ? 'black' : 'white', backgroundColor: newProductForm.category === cat ? 'var(--accent-turquoise)' : 'transparent', transition: 'all 0.2s', fontWeight: '700', letterSpacing: '1px' }}
-                                                                                        onMouseEnter={(e) => {
-                                                                                            if (newProductForm.category !== cat) {
-                                                                                                e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)';
-                                                                                                e.currentTarget.style.color = 'var(--accent-turquoise)';
-                                                                                            }
-                                                                                        }}
-                                                                                        onMouseLeave={(e) => {
-                                                                                            if (newProductForm.category !== cat) {
-                                                                                                e.currentTarget.style.backgroundColor = 'transparent';
-                                                                                                e.currentTarget.style.color = 'white';
-                                                                                            }
-                                                                                        }}
-                                                                                    >
-                                                                                        {cat}
-                                                                                    </div>
-                                                                                ))}
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
-                                                                </div>
-                                                                <div style={{ width: '120px' }}>
-                                                                    <label style={{ display: 'block', fontSize: '11px', color: 'var(--accent-gold)', marginBottom: '10px', fontWeight: '800', letterSpacing: '3px', textTransform: 'uppercase' }}>PREMIUM</label>
-                                                                    <button
-                                                                        onClick={() => setNewProductForm({ ...newProductForm, is_premium: !newProductForm.is_premium })}
-                                                                        style={{
-                                                                            width: '100%',
-                                                                            height: '54px',
-                                                                            backgroundColor: newProductForm.is_premium ? 'rgba(0, 212, 189, 0.2)' : 'rgba(255,255,255,0.02)',
-                                                                            border: `1px solid ${newProductForm.is_premium ? 'var(--accent-turquoise)' : 'rgba(255,255,255,0.05)'}`,
-                                                                            color: newProductForm.is_premium ? 'var(--accent-turquoise)' : '#555',
-                                                                            borderRadius: '4px',
-                                                                            cursor: 'pointer',
-                                                                            fontSize: '10px',
-                                                                            fontWeight: '900',
-                                                                            transition: 'all 0.3s'
-                                                                        }}
-                                                                    >
-                                                                        {newProductForm.is_premium ? 'SÍÍ' : 'NO'}
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-
-                                                            {/* SECCIÓN SEO & MARKETING (NUEVO) */}
-                                                            <div style={{ padding: '25px', background: 'rgba(212, 175, 55, 0.03)', borderRadius: '4px', border: '1px solid rgba(212, 175, 55, 0.1)', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                                    <label style={{ fontSize: '11px', color: 'var(--accent-gold)', fontWeight: '800', letterSpacing: '3px', textTransform: 'uppercase' }}>CONFIGURACIÓN SEO & MARKETING</label>
-                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                                        <span style={{ fontSize: '9px', color: '#555', fontWeight: '700' }}>¿APTO PARA CAMPAÑA?</span>
-                                                                        <button
-                                                                            onClick={() => setNewProductForm({ ...newProductForm, for_marketing: !newProductForm.for_marketing })}
-                                                                            style={{ padding: '4px 12px', borderRadius: '20px', border: '1px solid', borderColor: newProductForm.for_marketing ? 'var(--accent-turquoise)' : '#333', backgroundColor: newProductForm.for_marketing ? 'rgba(0,212,189,0.1)' : 'transparent', color: newProductForm.for_marketing ? 'var(--accent-turquoise)' : '#555', fontSize: '10px', fontWeight: '800', cursor: 'pointer' }}
-                                                                        >
-                                                                            {newProductForm.for_marketing ? 'SÍÍ, MARKETING READY' : 'NO'}
-                                                                        </button>
-                                                                    </div>
-                                                                </div>
-
-                                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-                                                                    <div>
-                                                                        <label style={{ display: 'block', fontSize: '9px', color: 'rgba(255,255,255,0.4)', marginBottom: '5px', fontWeight: '700' }}>TÍTULO SEO (H1 SUGERIDO)</label>
-                                                                        <input
-                                                                            type="text"
-                                                                            value={newProductForm.seo_title}
-                                                                            onChange={(e) => setNewProductForm({ ...newProductForm, seo_title: e.target.value })}
-                                                                            placeholder="Ej: Mochila Ejecutiva Premium..."
-                                                                            style={{ width: '100%', backgroundColor: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.05)', padding: '10px', color: 'white', borderRadius: '2px', fontSize: '13px', outline: 'none' }}
-                                                                        />
-                                                                    </div>
-                                                                    <div>
-                                                                        <label style={{ display: 'block', fontSize: '9px', color: 'rgba(255,255,255,0.4)', marginBottom: '5px', fontWeight: '700' }}>KEYWORD</label>
-                                                                        <input
-                                                                            type="text"
-                                                                            value={newProductForm.seo_keywords}
-                                                                            onChange={(e) => setNewProductForm({ ...newProductForm, seo_keywords: e.target.value })}
-                                                                            placeholder="regalos corporativos, sustentable..."
-                                                                            style={{ width: '100%', backgroundColor: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.05)', padding: '10px', color: 'white', borderRadius: '2px', fontSize: '13px', outline: 'none' }}
-                                                                        />
-                                                                    </div>
-                                                                </div>
-                                                                <div>
-                                                                    <label style={{ display: 'block', fontSize: '9px', color: 'rgba(255,255,255,0.4)', marginBottom: '5px', fontWeight: '700' }}>META DESCRIPCIÓN (INTENCIÓN DE VENTA)</label>
-                                                                    <textarea
-                                                                        value={newProductForm.seo_description}
-                                                                        onChange={(e) => setNewProductForm({ ...newProductForm, seo_description: e.target.value })}
-                                                                        placeholder="Breve descripción..."
-                                                                        style={{ width: '100%', height: '60px', backgroundColor: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.05)', padding: '10px', color: '#999', borderRadius: '2px', fontSize: '12px', resize: 'none', outline: 'none' }}
-                                                                    />
-                                                                </div>
-                                                            </div>
-
-                                                            {/* Fila 2: Título */}
-                                                            <div>
-                                                                <label style={{ display: 'block', fontSize: '11px', color: 'var(--accent-gold)', marginBottom: '10px', fontWeight: '800', letterSpacing: '3px', textTransform: 'uppercase' }}>TÍTULO DEL PRODUCTO</label>
-                                                                <input
-                                                                    type="text"
-                                                                    value={newProductForm.nombre || ''}
-                                                                    onChange={(e) => setNewProductForm({ ...newProductForm, nombre: e.target.value })}
-                                                                    style={{ width: '100%', backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '2px', padding: '18px', color: 'white', fontSize: '20px', fontWeight: '600', outline: 'none' }}
-                                                                />
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Columna Derecha: Specs */}
-                                                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                                                            <label style={{ display: 'block', fontSize: '11px', color: 'var(--accent-gold)', marginBottom: '15px', fontWeight: '800', letterSpacing: '2px', textTransform: 'uppercase' }}>ESPECIFICACIONES TÉCNICAS COMPLETAS</label>
-                                                            <textarea
-                                                                value={Array.isArray(newProductForm.technical_specs) ? newProductForm.technical_specs.join('\n') : ''}
-                                                                onChange={(e) => setNewProductForm({ ...newProductForm, technical_specs: e.target.value.split('\n').filter(l => l.trim()) })}
-                                                                placeholder="Copia aquí la ficha técnica del proveedor..."
-                                                                style={{ width: '100%', flex: 1, minHeight: '400px', backgroundColor: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '2px', padding: '25px', color: '#ccc', fontSize: '15px', outline: 'none', resize: 'none', lineHeight: '1.8', fontFamily: 'monospace' }}
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                <div style={{ marginTop: '40px', display: 'flex', gap: '20px', paddingBottom: '40px' }}>
-                                                    <button
-                                                        onClick={handleCreateManual}
-                                                        disabled={isSaving}
-                                                        style={{ flex: 1, backgroundColor: isSaving ? '#333' : 'var(--accent-gold)', color: 'black', border: 'none', padding: '25px', fontSize: '18px', fontWeight: '900', letterSpacing: '4px', cursor: isSaving ? 'not-allowed' : 'pointer', borderRadius: '4px', textTransform: 'uppercase', transition: 'all 0.3s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '15px' }}
-                                                    >
-                                                        {isSaving ? (
-                                                            <>
-                                                                <Loader2 className="animate-spin" size={24} />
-                                                                PROCESANDO IMAGEN...
-                                                            </>
-                                                        ) : 'CREAR PRODUCTO'}
-                                                    </button>
-                                                    <button
-                                                        onClick={() => setIsAddingNew(false)}
-                                                        style={{ backgroundColor: 'transparent', color: '#555', border: '1px solid #333', padding: '25px 50px', fontSize: '16px', fontWeight: '700', letterSpacing: '2px', cursor: 'pointer', borderRadius: '4px', textTransform: 'uppercase' }}
-                                                    >
-                                                        CANCELAR
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ) : selectedProduct ? (
+                                        {selectedProduct ? (
                                             <div style={{ display: 'flex', flexDirection: 'column', height: '100%', maxWidth: '1600px', margin: '0 auto', width: '100%' }}>
                                                 <div style={{ padding: '0 0 20px 0', borderBottom: '1px solid rgba(255,255,255,0.05)', marginBottom: '30px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
@@ -2570,11 +2179,26 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                                                                     <div style={{ display: 'flex', gap: '10px' }}>
                                                                         <input
                                                                             type="text"
-                                                                            value={selectedProduct?.category || ''}
-                                                                            onChange={(e) => handleUpdateProduct({ category: e.target.value })}
+                                                                            value={newCategoryName}
+                                                                            onChange={(e) => setNewCategoryName(e.target.value)}
                                                                             placeholder="EJ: TECNOLOGÍA"
                                                                             style={{ width: '100%', padding: '14px', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid var(--accent-turquoise)', color: 'white', borderRadius: '2px', fontSize: '11px', outline: 'none' }}
                                                                         />
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                if (!newCategoryName.trim()) return;
+                                                                                const normalized = newCategoryName.trim().toUpperCase();
+                                                                                if (!customCategories.includes(normalized)) {
+                                                                                    setCustomCategories(prev => [...prev, normalized]);
+                                                                                }
+                                                                                handleUpdateProduct({ category: normalized });
+                                                                                setNewCategoryName('');
+                                                                                setIsAddingCategory(false);
+                                                                            }}
+                                                                            style={{ padding: '0 20px', backgroundColor: 'var(--accent-turquoise)', color: 'black', border: 'none', borderRadius: '2px', fontSize: '11px', fontWeight: '900', cursor: 'pointer', letterSpacing: '1px' }}
+                                                                        >
+                                                                            AÑADIR
+                                                                        </button>
                                                                     </div>
                                                                 ) : (
                                                                     <div style={{ position: 'relative' }}>
@@ -3086,32 +2710,50 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                                                             AI CONTENT <span style={{ color: "var(--accent-gold)" }}>FACTORY</span>
                                                         </h2>
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                                                            {activeImage && (
+                                                            {marketingImage && (
                                                                 <div style={{ display: "flex", alignItems: "center", gap: "10px", background: "rgba(0,212,189,0.05)", padding: "5px 12px", borderRadius: "100px", border: "1px solid rgba(0,212,189,0.1)" }}>
                                                                     <span style={{ fontSize: "9px", color: "var(--accent-turquoise)", fontWeight: "900", letterSpacing: "1px" }}>IMAGEN LISTA</span>
-                                                                    <img src={activeImage} style={{ width: "20px", height: "20px", borderRadius: "50%", objectFit: "cover", border: "1px solid var(--accent-turquoise)" }} />
+                                                                    <img src={marketingImage} style={{ width: "20px", height: "20px", borderRadius: "50%", objectFit: "cover", border: "1px solid var(--accent-turquoise)" }} />
                                                                 </div>
                                                             )}
                                                         </div>
                                                     </div>
 
                                                     <div style={{ display: "flex", gap: "15px", alignItems: 'center' }}>
-                                                        <div style={{ position: 'relative' }}>
-                                                            <input
-                                                                type="text"
-                                                                placeholder="INSTRUCCIONES EXTRA (OPCIONAL)..."
-                                                                value={marketingAiContext}
-                                                                onChange={(e) => setMarketingAiContext(e.target.value)}
-                                                                style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', padding: '15px 20px', borderRadius: '4px', color: 'white', fontSize: '12px', width: '250px', outline: 'none' }}
-                                                            />
+                                                        {/* SKU INPUT — Primary Input @seo_mkt */}
+                                                        <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                <input
+                                                                    type="text"
+                                                                    placeholder="INGRESA SKU DEL PRODUCTO"
+                                                                    value={marketingSkuInput}
+                                                                    onChange={(e) => {
+                                                                        setMarketingSkuInput(e.target.value.toUpperCase());
+                                                                        setMarketingProductContext(null);
+                                                                    }}
+                                                                    onBlur={(e) => handleSkuSearch(e.target.value)}
+                                                                    onKeyDown={(e) => { if (e.key === 'Enter') handleSkuSearch(marketingSkuInput); }}
+                                                                    style={{ background: 'rgba(255,255,255,0.04)', border: `1px solid ${marketingProductContext ? 'var(--accent-turquoise)' : marketingSkuInput && !isSearchingSku ? 'rgba(255,71,87,0.5)' : 'rgba(255,255,255,0.15)'}`, padding: '14px 20px', borderRadius: '4px', color: 'white', fontSize: '12px', fontWeight: '800', width: '240px', outline: 'none', letterSpacing: '2px', transition: 'border-color 0.3s' }}
+                                                                />
+                                                                {isSearchingSku && <Loader2 className="animate-spin" size={14} style={{ color: 'var(--accent-turquoise)', position: 'absolute', right: '12px' }} />}
+                                                            </div>
+                                                            {marketingProductContext && (
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '3px 8px', background: 'rgba(0,212,189,0.08)', borderRadius: '3px', border: '1px solid rgba(0,212,189,0.2)' }}>
+                                                                    <Check size={10} style={{ color: 'var(--accent-turquoise)' }} />
+                                                                    <span style={{ fontSize: '9px', color: 'var(--accent-turquoise)', fontWeight: '700', letterSpacing: '1px' }}>{marketingProductContext.nombre} · {marketingProductContext.caracteristicas.length} SPECS</span>
+                                                                </div>
+                                                            )}
+                                                            {marketingSkuInput && !marketingProductContext && !isSearchingSku && (
+                                                                <span style={{ fontSize: '9px', color: 'rgba(255,71,87,0.8)', letterSpacing: '1px', paddingLeft: '4px' }}>SKU NO ENCONTRADO</span>
+                                                            )}
                                                         </div>
                                                         <div style={{ display: 'flex', gap: '10px' }}>
                                                             <button
                                                                 onClick={handleGenerateMarketingAI}
-                                                                disabled={isGeneratingAI || (!selectedProduct && !activeImage)}
-                                                                style={{ background: "rgba(0,212,189,0.1)", border: '1px solid var(--accent-turquoise)', color: "var(--accent-turquoise)", padding: "15px 40px", borderRadius: "4px", fontSize: "14px", fontWeight: "900", cursor: "pointer", textTransform: "uppercase", display: 'flex', alignItems: 'center', gap: '12px', transition: 'all 0.3s', boxShadow: '0 0 20px rgba(0, 212, 189, 0.1)' }}
-                                                                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(0,212,189,0.2)'}
-                                                                onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(0,212,189,0.1)'}
+                                                                disabled={isGeneratingAI || !activeImage || !marketingProductContext}
+                                                                style={{ background: marketingProductContext ? "rgba(0,212,189,0.1)" : 'rgba(255,255,255,0.03)', border: `1px solid ${marketingProductContext ? 'var(--accent-turquoise)' : 'rgba(255,255,255,0.1)'}`, color: marketingProductContext ? "var(--accent-turquoise)" : '#444', padding: "15px 40px", borderRadius: "4px", fontSize: "14px", fontWeight: "900", cursor: marketingProductContext ? "pointer" : 'not-allowed', textTransform: "uppercase", display: 'flex', alignItems: 'center', gap: '12px', transition: 'all 0.3s', boxShadow: marketingProductContext ? '0 0 20px rgba(0, 212, 189, 0.1)' : 'none' }}
+                                                                onMouseEnter={(e) => { if (marketingProductContext) e.currentTarget.style.background = 'rgba(0,212,189,0.2)'; }}
+                                                                onMouseLeave={(e) => { if (marketingProductContext) e.currentTarget.style.background = 'rgba(0,212,189,0.1)'; }}
                                                             >
                                                                 {isGeneratingAI ? <Loader2 className="animate-spin" size={18} /> : <Sparkles size={18} />}
                                                                 {isGeneratingAI ? "GENERANDO..." : "GEMINI"}
@@ -3160,21 +2802,21 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                                                         </div>
                                                         <div style={{ background: "#fff", padding: "40px", borderRadius: "8px", overflowY: "auto", maxHeight: "600px", border: '1px solid #333' }}>
                                                             <iframe
-                                                                srcDoc={generatedMarketing.html.replace('IMAGE_URL_PLACEHOLDER', activeImage || catalogViewerImage || (selectedProduct?.images?.[0] || ''))}
+                                                                srcDoc={generatedMarketing.html.replace('IMAGE_URL_PLACEHOLDER', marketingImage || (selectedProduct?.images?.[0] || ''))}
                                                                 style={{ width: "100%", height: "100%", minHeight: "600px", border: "none" }}
                                                                 title="Marketing Preview"
                                                             />
                                                         </div>
                                                     </div>
                                                 ) : (
-                                                    <div style={{ height: "400px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", opacity: activeImage ? 1 : 0.2, border: "2px dashed #444", borderRadius: "12px", overflow: "hidden" }}>
-                                                        {activeImage ? (
-                                                            <img src={activeImage} style={{ maxWidth: '80%', maxHeight: '300px', objectFit: 'contain', borderRadius: '4px', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }} />
+                                                    <div style={{ height: "400px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", opacity: marketingImage ? 1 : 0.2, border: "2px dashed #444", borderRadius: "12px", overflow: "hidden" }}>
+                                                        {marketingImage ? (
+                                                            <img src={marketingImage} style={{ maxWidth: '80%', maxHeight: '300px', objectFit: 'contain', borderRadius: '4px', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }} />
                                                         ) : (
                                                             <Sparkles size={60} />
                                                         )}
-                                                        <p style={{ marginTop: "20px", letterSpacing: "2px", color: activeImage ? "var(--accent-turquoise)" : "#666", fontWeight: activeImage ? "700" : "400" }}>
-                                                            {activeImage ? "IMAGEN RECIBIDA: PULSA 'GENERAR'" : "SELECCIONA UN PRODUCTO PARA GENERAR CONTENIDO"}
+                                                        <p style={{ marginTop: "20px", letterSpacing: "2px", color: marketingImage ? "var(--accent-turquoise)" : "#666", fontWeight: marketingImage ? "700" : "400" }}>
+                                                            {marketingImage ? "IMAGEN RECIBIDA: PULSA 'GENERAR'" : "ENVÍA UNA IMAGEN DESDE INSUMO"}
                                                         </p>
                                                     </div>
                                                 )}

@@ -67,10 +67,11 @@ export const generateMarketingAI = async (
     // PROTOCOLO @seo_mkt: Usamos gemini-2.0-flash (disponible y estable en este entorno)
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
-    // Validación según Logic Gate de @seo_mkt
-    if (!context || context.trim() === "" || context.includes("Referencia: Analiza la imagen")) {
-        // Si el contexto es vacío o no tieneSpecs (detectado por el fallback de CatalogHub)
-        console.warn("[SEO_MKT] Intento de generación sin datos técnicos.");
+    // PROTOCOLO @seo_mkt — Logic Gate: PRIMARY INPUT = CARACTERISTICAS_TECNICAS
+    // El contexto siempre llega con el prefijo "CARACTERISTICAS_TECNICAS:" desde el Hub.
+    // Si el contexto no existe o no tiene datos reales, se emite DATA_SOURCE_EMPTY.
+    if (!context || !context.includes('CARACTERISTICAS_TECNICAS:') || context.replace('CARACTERISTICAS_TECNICAS:', '').trim() === '') {
+        console.error("[SEO_MKT] Logic Gate activado: PRIMARY INPUT vacío o inválido.");
         throw new Error("[FATAL_ERROR: DATA_SOURCE_EMPTY]");
     }
 
@@ -83,24 +84,26 @@ export const generateMarketingAI = async (
     });
 
     const prompt = `
-Eres el Módulo de Inteligencia Semántica (@seo_mkt) de Ecomoving SpA. 
-Tu misión: Transformar datos técnicos áridos en una NARRATIVA de "Comercial de TV" premium.
+Eres el Módulo de Inteligencia Semántica (@seo_mkt) de Ecomoving SpA.
+Protocolo ADN activo. Fidelidad absoluta a los datos técnicos.
 
-PRIMARY INPUT (Única fuente de verdad):
+PRIMARY INPUT — ÚNICA FUENTE DE VERDAD:
 ${context}
 
-REGLAS DE ORO (@seo_mkt):
-1. PROHIBICIÓN DE NOMBRES: Prohibido mencionar nombres específicos de productos (ej. "SILLY", "YAMA", "BOTELLA X", etc.) en el texto generado. Refiérete al objeto por su categoría o esencia (ej. "Esta pieza", "Tu aliado de hidratación", "Diseño en aluminio").
-2. PRIORIDAD VISUAL: Si existe discrepancia entre el texto del PRIMARY INPUT y lo que observas en la IMAGEN, da prioridad absoluta a la IMAGEN.
-3. FIDELIDAD TÉCNICA: No inventes materiales ni marcas. Usa solo los atributos técnicos del input.
-4. NARRATIVA RÍTMICA: Estilo breve, sofisticado y de alto impacto psicológico. Sin listas.
-5. REFERENCIA GENÉRICA: Enfócate 100% en lo que ves en la IMAGEN.
-6. PROHIBIDO el copy-paste directo de las especificaciones.
+IMAGEN DEL PRODUCTO: Analiza la imagen para detectar forma, acabado, color y uso implícito. 
+Si hay discrepancia entre la imagen y las specs, la imagen tiene prioridad sobre la forma; las specs tienen prioridad sobre el contenido técnico.
 
-ESTRUCTURA DE SALIDA REQUERIDA (NO RESPONDAS NADA MÁS):
-SUBJECT: [Asunto de email de ultra-lujo]
-PART1: [Titular poético y potente]
-PART2: [Narrativa rítmica de 2 párrafos que respire exclusividad]
+REGLAS DE ORO (@seo_mkt — sin excepciones):
+1. PROHIBICIÓN ABSOLUTA DE NOMBRES: Nunca menciones nombres de marca, modelos o SKUs (ej. "SILLY", "YAMA", "W35"). Refiérete por categoría o esencia ("Este aliado de hidratación", "La pieza", "El instrumento").
+2. FIDELIDAD TÉCNICA: Solo usa materiales, certificaciones e impactos presentes en el PRIMARY INPUT. Prohibido inventar.
+3. TONO "CIERRE DE NEGOCIO": Directo, ejecutivo, sofisticado. Nunca informal ni entusiasta ("¡Te va a encantar!").
+4. NARRATIVA RÍTMICA: Estilo Comercial de TV. Frases cortas, ritmo, alto impacto psicológico para el decisor B2B.
+5. PROHIBIDO EL RELLENO: Si los datos técnicos no permiten construir una afirmación, simplemente no la hagas.
+
+ESTRUCTURA DE SALIDA REQUERIDA (responde SOLO esto, sin texto adicional):
+SUBJECT: [Asunto de email de ultra-lujo — máx 10 palabras, tono ejecutivo]
+PART1: [Titular poético y potente — máx 8 palabras, sin nombre de producto]
+PART2: [Narrativa B2B de 2 párrafos cortos. Párrafo 1: el problema que resuelve. Párrafo 2: la superioridad técnica del producto como solución. Sin listas, sin bullets.]
 `;
 
     const maxRetries = 5;
