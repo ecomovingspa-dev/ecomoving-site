@@ -1138,11 +1138,11 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
         }
         setIsSearchingSku(true);
         try {
-            // Query 1: búsqueda directa por sku_externo (case-insensitive)
+            // Query 1: búsqueda directa por sku_externo con wildcard (robusto)
             const { data: bySkuData } = await supabase
                 .from('productos')
-                .select('nombre, sku_externo, caracteristicas, features')
-                .ilike('sku_externo', skuClean)
+                .select('nombre, sku_externo, features')
+                .ilike('sku_externo', `%${skuClean}%`)
                 .limit(1);
 
             let found = bySkuData && bySkuData.length > 0 ? bySkuData[0] : null;
@@ -1151,7 +1151,7 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
             if (!found) {
                 const { data: byNameData } = await supabase
                     .from('productos')
-                    .select('nombre, sku_externo, caracteristicas, features')
+                    .select('nombre, sku_externo, features')
                     .ilike('nombre', `%${skuClean}%`)
                     .limit(1);
                 found = byNameData && byNameData.length > 0 ? byNameData[0] : null;
@@ -1160,13 +1160,12 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
             if (!found) {
                 setMarketingProductContext(null);
             } else {
-                const specs: string[] = Array.isArray(found.caracteristicas)
-                    ? found.caracteristicas.filter((s: any) => typeof s === 'string' && s.trim())
-                    : typeof found.caracteristicas === 'string' && found.caracteristicas.trim()
-                        ? [found.caracteristicas]
-                        : Array.isArray(found.features)
-                            ? found.features.filter((s: any) => typeof s === 'string' && s.trim())
-                            : [];
+                // La columna de specs en Supabase es `features`
+                const specs: string[] = Array.isArray(found.features)
+                    ? found.features.filter((s: any) => typeof s === 'string' && s.trim())
+                    : typeof found.features === 'string' && found.features.trim()
+                        ? [found.features]
+                        : [];
                 setMarketingProductContext({ nombre: found.nombre, caracteristicas: specs });
             }
         } catch (e) {
@@ -1192,11 +1191,11 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
         setIsGeneratingAI(true);
         setAiStatus('⚡ Consultando base de datos...');
         try {
-            // PRIMARY INPUT: columna `caracteristicas` desde Supabase — ilike para ser case-insensitive
+            // PRIMARY INPUT: columna `features` desde Supabase — ilike con wildcard
             const { data: skuResults } = await supabase
                 .from('productos')
-                .select('nombre, sku_externo, caracteristicas, features')
-                .ilike('sku_externo', skuClean)
+                .select('nombre, sku_externo, features')
+                .ilike('sku_externo', `%${skuClean}%`)
                 .limit(1);
 
             const data = skuResults && skuResults.length > 0 ? skuResults[0] : null;
@@ -1205,14 +1204,12 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                 throw new Error(`[FATAL_ERROR: DATA_SOURCE_EMPTY] — SKU "${skuClean}" no encontrado en la base de datos`);
             }
 
-            // Normalizar caracteristicas (puede ser array de texto o JSON)
-            const specs: string[] = Array.isArray(data.caracteristicas)
-                ? data.caracteristicas.filter((s: any) => typeof s === 'string' && s.trim())
-                : typeof data.caracteristicas === 'string' && data.caracteristicas.trim()
-                    ? [data.caracteristicas]
-                    : Array.isArray(data.features)
-                        ? data.features.filter((s: any) => typeof s === 'string' && s.trim())
-                        : [];
+            // La columna de specs en Supabase es `features`
+            const specs: string[] = Array.isArray(data.features)
+                ? data.features.filter((s: any) => typeof s === 'string' && s.trim())
+                : typeof data.features === 'string' && data.features.trim()
+                    ? [data.features]
+                    : [];
 
             if (specs.length === 0) {
                 throw new Error(`[FATAL_ERROR: DATA_SOURCE_EMPTY] — El producto "${data.nombre}" no tiene características técnicas cargadas`);
