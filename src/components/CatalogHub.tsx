@@ -2759,7 +2759,7 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                                                         <div style={{ display: 'flex', gap: '10px' }}>
                                                             <button
                                                                 onClick={handleGenerateMarketingAI}
-                                                                disabled={isGeneratingAI || !activeImage || !marketingProductContext}
+                                                                disabled={isGeneratingAI || !marketingImage || !marketingProductContext}
                                                                 style={{ background: marketingProductContext ? "rgba(0,212,189,0.1)" : 'rgba(255,255,255,0.03)', border: `1px solid ${marketingProductContext ? 'var(--accent-turquoise)' : 'rgba(255,255,255,0.1)'}`, color: marketingProductContext ? "var(--accent-turquoise)" : '#444', padding: "15px 40px", borderRadius: "4px", fontSize: "14px", fontWeight: "900", cursor: marketingProductContext ? "pointer" : 'not-allowed', textTransform: "uppercase", display: 'flex', alignItems: 'center', gap: '12px', transition: 'all 0.3s', boxShadow: marketingProductContext ? '0 0 20px rgba(0, 212, 189, 0.1)' : 'none' }}
                                                                 onMouseEnter={(e) => { if (marketingProductContext) e.currentTarget.style.background = 'rgba(0,212,189,0.2)'; }}
                                                                 onMouseLeave={(e) => { if (marketingProductContext) e.currentTarget.style.background = 'rgba(0,212,189,0.1)'; }}
@@ -2777,6 +2777,14 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                                                         </button>
                                                     </div>
                                                 </div>
+
+                                                {/* STATUS BAR @seo_mkt */}
+                                                {aiStatus && (
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 16px', background: 'rgba(255,255,255,0.03)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.07)', marginBottom: '20px' }}>
+                                                        <Loader2 className={isGeneratingAI ? 'animate-spin' : ''} size={14} style={{ color: 'var(--accent-turquoise)' }} />
+                                                        <span style={{ fontSize: '11px', color: 'var(--accent-turquoise)', letterSpacing: '2px', fontWeight: '700' }}>{aiStatus}</span>
+                                                    </div>
+                                                )}
 
                                                 {generatedMarketing ? (
                                                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "40px" }}>
