@@ -100,12 +100,66 @@ REGLAS DE ORO (@seo_mkt — sin excepciones):
 4. NARRATIVA RÍTMICA: Estilo Comercial de TV. Frases cortas, ritmo, alto impacto psicológico para el decisor B2B.
 5. PROHIBIDO EL RELLENO: Si los datos técnicos no permiten construir una afirmación, simplemente no la hagas.
 
-ESTRUCTURA DE SALIDA REQUERIDA (responde SOLO esto, sin texto adicional):
-SUBJECT: [Asunto de email — MÁX 4 PALABRAS, tono ejecutivo, genera urgencia o exclusividad]
-PART1: [Titular potente — máx 6 palabras, uppercase, sin nombre de producto]
-PART2: [EXACTAMENTE 4 frases cortas. Cada frase en una línea separada. CRITERIO: extraer las 4 características MÁS BUSCADAS del producto según el PRIMARY INPUT (priorizar: temperatura, material, capacidad, sostenibilidad, diseño). Cada frase máx 12 palabras. Tono ejecutivo. Sin bullets ni numeración. Sin mencionar nombres de marca.]
+ESTRUCTURA DE SALIDA REQUERIDA (responde SOLO esto, sin texto adicional, sin emojis, sin asteriscos):
+SUBJECT: [MÁX 4 PALABRAS. Si generas más de 4 palabras, el sistema rechazará tu respuesta.]
+PART1: [MÁX 6 PALABRAS en mayúsculas. Sin nombre de producto.]
+PART2: [EXACTAMENTE 4 frases. Una frase por línea. Sin bullets (•-*), sin números, sin guiones. Cada frase máx 12 palabras. Priorizar en este orden: 1° temperatura/rendimiento, 2° materiales, 3° capacidad/dimensiones, 4° sostenibilidad/diseño.]
+
+EJEMPLO DE SALIDA IDEAL (usa este como modelo exacto de formato):
+SUBJECT: Tecnología que transforma
+PART1: PRECISIÓN TÉRMICA SIN CÓMPROMISO
+PART2: Mantiene bebidas frías 24 horas y calientes 12.
+Aislamiento al vacío con doble pared de acero inoxidable.
+Capacidad 600 ml, base antideslizante, tapa sellada.
+Acero reciclado: eficiencia y responsabilidad empresarial.
 `;
 
+    // --- BLINDAJE NIVEL 2: Sanitizador de salida post-generación ---
+    const sanitizeOutput = (subject: string, part1: string, part2: string) => {
+        // SUBJECT: máx 4 palabras
+        const sanitizedSubject = subject
+            .replace(/[*#\-•]/g, '')
+            .trim()
+            .split(/\s+/)
+            .slice(0, 4)
+            .join(' ');
+
+        // PART1: máx 6 palabras, uppercase
+        const sanitizedPart1 = part1
+            .replace(/[*#\-•]/g, '')
+            .trim()
+            .split(/\s+/)
+            .slice(0, 6)
+            .join(' ')
+            .toUpperCase();
+
+        // PART2: exactamente 4 frases, sin bullets
+        const cleanPart2 = part2
+            .replace(/^[\s\u2022\-*’‘\d\.]+/gm, '') // quitar bullets/números al inicio de línea
+            .replace(/[*#]/g, '')                         // quitar asteriscos y hashes
+            .trim();
+
+        // Separar por salto de línea o por punto+espacio
+        const sentences = cleanPart2
+            .split(/\n+/)
+            .map(s => s.trim())
+            .filter(s => s.length > 4);
+
+        // Si no hay 4 líneas, intentar separar por oración
+        const finalSentences = sentences.length >= 4
+            ? sentences.slice(0, 4)
+            : cleanPart2
+                .split(/(?<=[.!?])\s+/)
+                .map(s => s.trim())
+                .filter(s => s.length > 4)
+                .slice(0, 4);
+
+        const sanitizedPart2 = finalSentences.join('\n');
+
+        return { subject: sanitizedSubject, part1: sanitizedPart1, part2: sanitizedPart2 };
+    };
+
+    // --- FIN BLINDAJE NIVEL 2 ---
     const maxRetries = 5;
     let lastError: any;
 
@@ -125,15 +179,18 @@ PART2: [EXACTAMENTE 4 frases cortas. Cada frase en una línea separada. CRITERIO
                 return null;
             };
 
-            const subject = findField([/SUBJECT:\s*(.*)/i, /ASUNTO:\s*(.*)/i]) || "Ecomoving: Trascendencia Sostenible";
-            const p1 = findField([/PART1:\s*([\s\S]*?)(?=PART2:|$)/i, /TITULAR:\s*([\s\S]*?)(?=CUERPO:|$)/i]) || "Ingeniería de Vanguarda";
+            const subject = findField([/SUBJECT:\s*(.*)/i, /ASUNTO:\s*(.*)/i]) || "Tecnología que transforma";
+            const p1 = findField([/PART1:\s*([\s\S]*?)(?=PART2:|$)/i, /TITULAR:\s*([\s\S]*?)(?=CUERPO:|$)/i]) || "INGENIERÍA DE VANGUARDIA";
             const p2 = findField([/PART2:\s*([\s\S]*)$/i, /CUERPO:\s*([\s\S]*)$/i]) || text;
 
+            // BLINDAJE NIVEL 2: aplicar sanitizador antes de devolver
+            const { subject: s, part1: p1s, part2: p2s } = sanitizeOutput(subject, p1, p2);
+
             return {
-                subject,
-                part1: p1.replace(/\*/g, '').replace(/#/g, '').trim(),
-                part2: p2.replace(/\*/g, '').replace(/#/g, '').trim(),
-                html: getMarketingHTMLTemplate(subject, p1, p2)
+                subject: s,
+                part1: p1s,
+                part2: p2s,
+                html: getMarketingHTMLTemplate(s, p1s, p2s)
             };
         } catch (error: any) {
             lastError = error;
