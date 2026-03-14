@@ -4,9 +4,10 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     X, Search, Loader2, Sparkles, Check, RefreshCw,
-    FileText, Zap, BarChart3, Save, Edit3, Eye, Type, Link as LinkIcon
+    FileText, Zap, BarChart3, Save, Edit3, Eye, Type, Link as LinkIcon, Database
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import LandingAuditor from './LandingAuditor';
 
 interface WebContent {
     id: number;
@@ -31,10 +32,11 @@ interface SEOImprovement {
 interface EditorSEOProps {
     isOpen: boolean;
     onClose: () => void;
-    onContentUpdate?: () => void;
+    onContentUpdate?: (sectionName: string, newContent: any) => void;
+    selectedBlockId?: string | null;
 }
 
-export default function EditorSEO({ isOpen, onClose, onContentUpdate }: EditorSEOProps) {
+export default function EditorSEO({ isOpen, onClose, onContentUpdate, selectedBlockId }: EditorSEOProps) {
     const [webContent, setWebContent] = useState<WebContent[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -52,6 +54,12 @@ export default function EditorSEO({ isOpen, onClose, onContentUpdate }: EditorSE
     // Contexto de IA para generación de contenido
     const [contextCategory, setContextCategory] = useState<string>('GENERAL');
     const [contextSpecs, setContextSpecs] = useState<string>('');
+
+    // Estado para generación integrada del Hero y Bloques
+    const [generatingHero, setGeneratingHero] = useState(false);
+    const [generatingBlock, setGeneratingBlock] = useState<string | null>(null);
+    const [heroDraft, setHeroDraft] = useState<{ title1: string; paragraph1: string; cta_text: string } | null>(null);
+    const [blockInputs, setBlockInputs] = useState<Record<string, { sku: string, ref: string }>>({});
 
     // Categorías disponibles para contexto
     const AVAILABLE_CATEGORIES = ['GENERAL', 'BOTELLAS', 'MUGS', 'TAZAS', 'LIBRETAS', 'MOCHILAS', 'TECNOLOGÍA', 'BOLÍGRAFOS', 'ECO'];
@@ -73,7 +81,11 @@ export default function EditorSEO({ isOpen, onClose, onContentUpdate }: EditorSE
         cta_link: 'LINK BOTÓN',
         alt_text: 'TEXTO ALT IMAGEN (SEO)',
         meta_title: 'META TÍTULO GOOGLE',
-        focus_keywords: 'PALABRAS CLAVE (Foco)'
+        focus_keywords: 'PALABRAS CLAVE (Foco)',
+        blockTitle: 'TÍTULO DE PRODUCTO / BLOQUE',
+        blockParagraph: 'PÁRRAFO DE VENTA / GANCHOS',
+        titleLineHeight: 'INTERLINEADO TÍTULO',
+        paragraphLineHeight: 'INTERLINEADO PÁRRAFO'
     };
 
     const DEFAULT_SECTION_CONTENT: Record<string, any> = {
@@ -81,7 +93,9 @@ export default function EditorSEO({ isOpen, onClose, onContentUpdate }: EditorSE
             title1: 'ECOMOVING: MERCHANDISING SUSTENTABLE Y DISEÑO PREMIUM',
             paragraph1: 'Elevamos tu marca con productos corporativos de alto impacto y conciencia ecológica.',
             cta_text: 'EXPLORAR CATÁLOGO 2026',
-            cta_link: '/catalogo'
+            cta_link: '/catalogo',
+            titleLineHeight: '1.1',
+            paragraphLineHeight: '1.5'
         },
         sections: {
             title1: 'Nueva Sección de Alto Impacto',
@@ -218,6 +232,14 @@ export default function EditorSEO({ isOpen, onClose, onContentUpdate }: EditorSE
         }
     }, [contextCategory, isOpen]);
 
+    // Efecto para abrir automáticamente la pestaña de Secciones Dinámicas si hay un bloque seleccionado
+    useEffect(() => {
+        if (isOpen && selectedBlockId) {
+            setSelectedSection('sections');
+        }
+    }, [isOpen, selectedBlockId]);
+
+
 
     const saveContent = async (section: string, newContent: Record<string, unknown>) => {
         setSaving(true);
@@ -243,7 +265,7 @@ export default function EditorSEO({ isOpen, onClose, onContentUpdate }: EditorSE
                     : item
             ));
 
-            onContentUpdate?.();
+            onContentUpdate?.(section, newContent);
             return true;
         } catch (error) {
             console.error('Error saving content:', error);
@@ -306,7 +328,7 @@ export default function EditorSEO({ isOpen, onClose, onContentUpdate }: EditorSE
             // Sincronización inmediata
             setTimeout(() => {
                 fetchContent(); // Recargar datos locales del editor
-                onContentUpdate?.(); // Notificar a la página principal
+                onContentUpdate?.(selectedSection, newContent); // Notificar con los datos frescos
             }, 100);
         }
     };
@@ -346,7 +368,363 @@ export default function EditorSEO({ isOpen, onClose, onContentUpdate }: EditorSE
         alert('Sección optimizada y guardada correctamente.');
     };
 
+    // ── GENERAR HERO CON DATOS DEL CATÁLOGO (equiv. al botón del Composer) ──
+    const handleMagicHero = async () => {
+        setGeneratingHero(true);
+        setHeroDraft(null);
+        try {
+            // 1. Specs del catálogo según categoría activa
+            let catalogContext = contextSpecs;
+            if (!catalogContext || contextCategory === 'GENERAL') {
+                const { data } = await supabase
+                    .from('productos')
+                    .select('nombre, descripcion, features, material')
+                    .limit(5);
+                if (data && data.length > 0) {
+                    catalogContext = data.map(p =>
+                        `${p.nombre} (${p.material || 'Material Premium'}): ${Array.isArray(p.features) ? p.features.slice(0, 3).join(', ') : p.descripcion?.substring(0, 80)}`
+                    ).join('. ').substring(0, 800);
+                } else {
+                    catalogContext = 'Merchandising corporativo sustentable de alto diseño.';
+                }
+            }
 
+            const baseContext = `DATOS REALES DEL CATÁLOGO (${contextCategory}): ${catalogContext}. IMAGEN DE MARCA: Ecomoving, empresa chilena de merchandising corporativo premium sustentable. Tono: Impactante, sofisticado, profesional.`;
+
+            // 2. Generar TÍTULO H1
+            const titleRes = await fetch('/api/seo', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'improve',
+                    text: `Título hero principal para sección ${contextCategory}`,
+                    section: 'Hero',
+                    context: `${baseContext}. ROL: COPYWRITER SENIOR. MISIÓN: Crear un TÍTULO H1 (4-7 palabras) potente y memorable que capture la esencia del merchandising sustentable aplicado a ${contextCategory}. Sin comillas, sin markdown.`
+                })
+            });
+            const titleData = await titleRes.json();
+            const cleanTitle = (titleData.data?.improved || `ECOMOVING ${contextCategory}`)
+                .replace(/^["'`{]+|["'`}]+$/g, '').replace(/^[A-Z_]+:\s*/i, '').trim();
+
+            // 3. Generar PÁRRAFO bajada
+            const paraRes = await fetch('/api/seo', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'improve',
+                    text: `Descripción hero para ${contextCategory} corporativo`,
+                    section: 'Hero',
+                    context: `${baseContext}. ROL: ESPECIALISTA PRODUCTO TÉCNICO. MISIÓN: Redactar una BAJADA comercial (20-30 palabras) que fusione beneficios emocionales con especificaciones reales. Mencionar sustentabilidad e impacto de marca. Sin comillas, sin markdown.`
+                })
+            });
+            const paraData = await paraRes.json();
+            const cleanPara = (paraData.data?.improved || 'Elevamos tu marca con productos de alto impacto y conciencia ecológica.')
+                .replace(/^["'`{]+|["'`}]+$/g, '').replace(/^[A-Z_]+:\s*/i, '').trim();
+
+            // 4. Generar CTA
+            const ctaRes = await fetch('/api/seo', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'improve',
+                    text: `Texto botón CTA para ${contextCategory}`,
+                    section: 'Hero CTA',
+                    context: `${baseContext}. ROL: EXPERTO CRO. MISIÓN: Texto de BOTÓN de acción (2-3 palabras máximo), directo e irresistible. Sin comillas, sin markdown.`
+                })
+            });
+            const ctaData = await ctaRes.json();
+            const cleanCta = (ctaData.data?.improved || 'EXPLORAR CATÁLOGO')
+                .replace(/^["'`{]+|["'`}]+$/g, '').replace(/^[A-Z_]+:\s*/i, '').trim().toUpperCase();
+
+            setHeroDraft({ title1: cleanTitle, paragraph1: cleanPara, cta_text: cleanCta });
+
+        } catch (err) {
+            console.error('Error generando Hero con catálogo:', err);
+            alert('Error conectando con el redactor IA.');
+        } finally {
+            setGeneratingHero(false);
+        }
+    };
+
+    const applyHeroDraft = async () => {
+        if (!heroDraft || !selectedSection) return;
+        const sectionData = webContent.find(s => s.section === selectedSection);
+        if (!sectionData) return;
+        const newContent = { ...(sectionData.content as any), ...heroDraft };
+        const ok = await saveContent(selectedSection, newContent);
+        if (ok) {
+            setHeroDraft(null);
+            setTimeout(() => { fetchContent(); }, 100);
+        }
+    };
+
+    const handleMagicBlock = async (sectionId: string, block: any) => {
+        if (!selectedSection) return;
+        setGeneratingBlock(block.id);
+        try {
+            const baseContext = `Eres el Director de Marketing B2B experto en Merchandising Sustentable. Contexto técnico global: ${contextSpecs}`;
+
+            // 1. Generar Título del Bloque
+            const titleRes = await fetch('/api/seo', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'improve',
+                    text: `Título impactante para: ${block.label || contextCategory}`,
+                    section: 'Block Title',
+                    context: `${baseContext}. ROL: COPYWRITER SENIOR. MISIÓN: Crea un título potente (2-5 palabras). Sin comillas.`
+                })
+            });
+            const titleData = await titleRes.json();
+            const cleanTitle = (titleData.data?.improved || block.label || 'Producto Premium')
+                .replace(/^["'`{]+|["'`}]+$/g, '').replace(/^[A-Z_]+:\s*/i, '').trim();
+
+            // 2. Generar Párrafo del Bloque
+            const paraRes = await fetch('/api/seo', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'improve',
+                    text: `Párrafo corto de venta para: ${block.label || contextCategory}`,
+                    section: 'Block Description',
+                    context: `${baseContext}. ROL: ESPECIALISTA PRODUCTO TÉCNICO. MISIÓN: Redactar un gancho comercial (15-20 palabras) fusionando beneficios y spec técnica. Sin comillas.`
+                })
+            });
+            const paraData = await paraRes.json();
+            const cleanPara = (paraData.data?.improved || 'Diseño de alto impacto corporativo y material sustentable premium.')
+                .replace(/^["'`{]+|["'`}]+$/g, '').replace(/^[A-Z_]+:\s*/i, '').trim();
+
+            // 3. Generar Alt Text (Imágenes de SEO vital)
+            const altRes = await fetch('/api/seo', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'improve',
+                    text: `Texto alternativo para imagen SEO de: ${block.label || contextCategory}`,
+                    section: 'Block Alt Text',
+                    context: `${baseContext}. ROL: SEO MANAGER. MISIÓN: Texto ALT técnico (max 8 palabras) describiendo producto, color, marca. Sin comillas.`
+                })
+            });
+            const altData = await altRes.json();
+            const cleanAlt = (altData.data?.improved || `${block.label} corporativo merch`)
+                .replace(/^["'`{]+|["'`}]+$/g, '').replace(/^[A-Z_]+:\s*/i, '').trim();
+
+            // Actualizar la DB inmediatamente
+            const sectionData = webContent.find(s => s.section === selectedSection);
+            if (!sectionData) return;
+
+            const sections = Array.isArray(sectionData.content) ? [...(sectionData.content as any)] : [];
+            const newContent = sections.map((s: any) => {
+                if (s.id === sectionId) {
+                    return {
+                        ...s,
+                        blocks: (s.blocks || []).map((b: any) =>
+                            b.id === block.id ? {
+                                ...b,
+                                blockTitle: cleanTitle,
+                                blockParagraph: cleanPara,
+                                alt_text: cleanAlt
+                            } : b
+                        )
+                    };
+                }
+                return s;
+            });
+
+            const ok = await saveContent(selectedSection, newContent as any);
+            if (ok) {
+                setTimeout(() => { fetchContent(); }, 100);
+            }
+
+        } catch (err) {
+            console.error('Error generando Bloque IA:', err);
+            alert('Error conectando con el motor IA.');
+        } finally {
+            setGeneratingBlock(null);
+        }
+    };
+
+    const handleMagicBlockSKU = async (sectionId: string, block: any) => {
+        if (!selectedSection) return;
+        const sku = blockInputs[block.id]?.sku?.trim();
+        if (!sku) {
+            alert("Por favor, ingresa un SKU para buscar.");
+            return;
+        }
+
+        setGeneratingBlock(block.id);
+        try {
+            // Extraer de la fuente de verdad viva
+            const { data, error } = await supabase.from('productos')
+                .select('*')
+                .or(`sku_externo.ilike.%${sku}%,nombre.ilike.%${sku}%`)
+                .limit(1);
+
+            if (error || !data || data.length === 0) {
+                alert(`SKU '${sku}' no encontrado.`);
+                setGeneratingBlock(null);
+                return;
+            }
+
+            const foundProduct = data[0];
+            const rawDescription = foundProduct.descripcion || '';
+            const material = foundProduct.material || '';
+            const featuresArray = Array.isArray(foundProduct.features) ? foundProduct.features.join('. ') : (foundProduct.features || '');
+            const allFeaturesText = `${rawDescription}. ${material}. ${featuresArray}`.substring(0, 800);
+
+            // En lugar de Regex, delegamos a la IA la tarea técnica de síntesis
+            const paraRes = await fetch('/api/seo', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'improve',
+                    text: `Características técnicas: ${allFeaturesText}`,
+                    section: 'Block SKU Summary',
+                    context: `Eres un SINTETIZADOR TÉCNICO B2B. Tu misión: Extrae lo más valioso de esta data y genera UN gancho comercial o bala técnica directa de MÁXIMO 10-12 palabras. No inventes características, usa solo las reales provistas. Sin comillas.`
+                })
+            });
+            const paraData = await paraRes.json();
+            const cleanFeature = (paraData.data?.improved || paraData.data?.text || 'Generación pausada o sin datos técnicos suficientes.')
+                .replace(/^["'`{]+|["'`}]+$/g, '').replace(/^[A-Z_]+:\s*/i, '').trim();
+
+            const sectionData = webContent.find(s => s.section === selectedSection);
+            if (!sectionData) return;
+
+            const sections = Array.isArray(sectionData.content) ? [...(sectionData.content as any)] : [];
+            const newContent = sections.map((s: any) => {
+                if (s.id === sectionId) {
+                    return {
+                        ...s,
+                        blocks: (s.blocks || []).map((b: any) =>
+                            b.id === block.id ? {
+                                ...b,
+                                blockTitle: foundProduct.nombre, // Inyección Directa (Sin adulteración IA)
+                                blockParagraph: cleanFeature,   // Síntesis técnica IA
+                                alt_text: `${foundProduct.nombre} corporativo`
+                            } : b
+                        )
+                    };
+                }
+                return s;
+            });
+
+            const ok = await saveContent(selectedSection, newContent as any);
+            if (ok) {
+                setTimeout(() => { fetchContent(); }, 100);
+            }
+
+        } catch (err) {
+            console.error('Error procesando SKU:', err);
+            alert('Error conectando con la base de datos o motor IA.');
+        } finally {
+            setGeneratingBlock(null);
+        }
+    };
+
+    const handleMagicBlockReference = async (sectionId: string, block: any) => {
+        if (!selectedSection) return;
+        const ref = blockInputs[block.id]?.ref?.trim() || block.label || contextCategory;
+
+        setGeneratingBlock(block.id);
+        try {
+            // 1. Consulta Viva (Supabase Cross-Reference) para evitar alucinaciones y genéricos
+            const { data: dbMatches } = await supabase.from('productos')
+                .select('nombre, descripcion, material, features')
+                .or(`nombre.ilike.%${ref}%,descripcion.ilike.%${ref}%`)
+                .limit(4);
+
+            let extractedContext = '';
+            if (dbMatches && dbMatches.length > 0) {
+                // Sintetizar ADN real 
+                extractedContext = dbMatches.map(p => {
+                    const feats = Array.isArray(p.features) ? p.features.slice(0, 2).join(', ') : '';
+                    return `[Ref: ${p.nombre} | Material: ${p.material || 'N/A'} | Highlights: ${feats || p.descripcion?.substring(0, 50)}]`;
+                }).join(' --- ');
+            } else {
+                extractedContext = "[ALERTA: SIN DATOS TÉCNICOS EN CATÁLOGO PARA ESTA REFERENCIA. PROCEDE CON NARRATIVA DE CATEGORÍA ESPECIAL GÉNÉRICA PERO ÚNICA]";
+            }
+
+            const baseContext = `DATOS REALES DE CATÁLOGO (Ref: '${ref}'): ${extractedContext.substring(0, 1000)}. IMAGEN DE MARCA: Merchandising corporativo premium y sustentable.`;
+
+            // 1. Generar Título del Bloque
+            const titleRes = await fetch('/api/seo', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'improve',
+                    text: `Crear título para categoría: ${ref}`,
+                    section: 'Block Title',
+                    context: `${baseContext}. ROL: COPYWRITER SENIOR. MISIÓN: Crea un título potente y descriptivo (2-5 palabras). OBLIGATORIO: Basa tu vocabulario en los DATOS REALES provistos. Sin comillas.`
+                })
+            });
+            const titleData = await titleRes.json();
+            const cleanTitle = (titleData.data?.improved || ref || 'Producto Premium')
+                .replace(/^["'`{]+|["'`}]+$/g, '').replace(/^[A-Z_]+:\s*/i, '').trim();
+
+            // 2. Generar Párrafo del Bloque
+            const paraRes = await fetch('/api/seo', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'improve',
+                    text: `Crear texto promocional corto para: ${ref}`,
+                    section: 'Block Description',
+                    context: `${baseContext}. ROL: ESPECIALISTA PRODUCTO TÉCNICO. MISIÓN: Redactar un gancho comercial (15-20 palabras). REGLA INFLEXIBLE: DEBES usar atributos exactos de los DATOS REALES. SI NO HAY DATOS REALES, redacta una invitación única a cotizar la categoría '${ref}' enfocada en personalización corporativa. NO USES FRASES GENÉRICAS PREARMADAS. Sin comillas.`
+                })
+            });
+            const paraData = await paraRes.json();
+            const cleanPara = (paraData.data?.improved || paraData.data?.text || 'Contenido Premium Ecomoving.')
+                .replace(/^["'`{]+|["'`}]+$/g, '').replace(/^[A-Z_]+:\s*/i, '').trim();
+
+            // 3. Generar Alt Text (Imágenes de SEO vital)
+            const altRes = await fetch('/api/seo', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'improve',
+                    text: `Texto alternativo SEO para: ${ref}`,
+                    section: 'Block Alt Text',
+                    context: `${baseContext}. ROL: SEO MANAGER. MISIÓN: Texto ALT técnico (max 8 palabras) describiendo producto principal de la referencia, función principal y material real de la data provista. Sin comillas.`
+                })
+            });
+            const altData = await altRes.json();
+            const cleanAlt = (altData.data?.improved || `${ref} corporativo merch`)
+                .replace(/^["'`{]+|["'`}]+$/g, '').replace(/^[A-Z_]+:\s*/i, '').trim();
+
+            // Actualizar la DB inmediatamente
+            const sectionData = webContent.find(s => s.section === selectedSection);
+            if (!sectionData) return;
+
+            const sections = Array.isArray(sectionData.content) ? [...(sectionData.content as any)] : [];
+            const newContent = sections.map((s: any) => {
+                if (s.id === sectionId) {
+                    return {
+                        ...s,
+                        blocks: (s.blocks || []).map((b: any) =>
+                            b.id === block.id ? {
+                                ...b,
+                                blockTitle: cleanTitle,
+                                blockParagraph: cleanPara,
+                                alt_text: cleanAlt
+                            } : b
+                        )
+                    };
+                }
+                return s;
+            });
+
+            const ok = await saveContent(selectedSection, newContent as any);
+            if (ok) {
+                setTimeout(() => { fetchContent(); }, 100);
+            }
+
+        } catch (err) {
+            console.error('Error generando Bloque IA:', err);
+            alert('Error conectando con el motor IA.');
+        } finally {
+            setGeneratingBlock(null);
+        }
+    };
 
 
 
@@ -604,7 +982,7 @@ export default function EditorSEO({ isOpen, onClose, onContentUpdate }: EditorSE
                         right: 0,
                         top: 0,
                         bottom: 0,
-                        width: '450px',
+                        width: '540px',
                         backgroundColor: '#0a0a0a',
                         boxShadow: '-20px 0 80px rgba(0,0,0,0.8)',
                         zIndex: 100000,
@@ -749,215 +1127,218 @@ export default function EditorSEO({ isOpen, onClose, onContentUpdate }: EditorSE
                         ) : activeTab === 'edit' ? (
                             <div>
                                 {selectedSection === 'sections' ? (
-                                    // Renderizado especial para Secciones Dinámicas y sus Bloques
-                                    (Array.isArray(getSelectedContent()) ? (getSelectedContent() as unknown as any[]) : []).map((section: any) => (
-                                        <div key={section.id} style={{ marginBottom: '40px', borderLeft: '2px solid rgba(255,255,255,0.05)', paddingLeft: '20px' }}>
-                                            <div style={{ fontSize: '10px', color: '#666', marginBottom: '15px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: section.bgColor || 'var(--accent-turquoise)' }}></div>
-                                                SECCIÓN: {section.title1?.toUpperCase() || 'NUEVA SECCIÓN'}
-                                            </div>
-
-                                            {/* Los campos configurables solicitados */}
-                                            {renderEditableField(`block:${section.id}:root:subtitle`, section.subtitle || '')}
-                                            {renderEditableField(`block:${section.id}:root:title1`, section.title1 || '')}
-                                            {renderEditableField(`block:${section.id}:root:paragraph1`, section.paragraph1 || '')}
-                                            {renderEditableField(`block:${section.id}:root:title2`, section.title2 || '')}
-                                            {renderEditableField(`block:${section.id}:root:paragraph2`, section.paragraph2 || '')}
-
-                                            {/* Opcional: Otros bloques con texto (pueden heredar de los campos anteriores) */}
-                                            {section.blocks?.filter((b: any) => (b.type === 'text' || b.type === 'both') && b.textContent).map((block: any) => (
-                                                <div key={block.id} style={{ marginTop: '15px', opacity: 0.6 }}>
-                                                    <div style={{ fontSize: '8px', color: 'var(--accent-gold)', marginBottom: '5px' }}>
-                                                        └ Bloque Específico: {block.label || 'Texto'}
-                                                    </div>
-                                                    {renderEditableField(`block:${section.id}:${block.id}:textContent`, block.textContent || '')}
-                                                </div>
-                                            ))}
+                                    <>
+                                        {/* DEBUG INFO TO REMOVE LATER */}
+                                        <div style={{ padding: '10px', background: 'red', color: 'white', marginBottom: '20px', fontSize: '10px', fontWeight: 'bold' }}>
+                                            DEBUG - ID SELECCIONADO: {selectedBlockId ? `"${selectedBlockId}"` : 'NULL'}
                                         </div>
-                                    ))
+                                        {/* Renderizado especial para Secciones Dinámicas y sus Bloques */}
+                                        {(Array.isArray(getSelectedContent()) ? (getSelectedContent() as unknown as any[]) : []).map((section: any) => {
+                                            const hasSelectedBlock = selectedBlockId && section.blocks?.some((b: any) => b.id === selectedBlockId);
+
+                                            // Ocultar sección si estamos enfocados en un bloque que no pertenece a esta
+                                            if (selectedBlockId && !hasSelectedBlock) return null;
+
+                                            return (
+                                                <div key={section.id} style={{ marginBottom: selectedBlockId ? '10px' : '40px', borderLeft: selectedBlockId ? 'none' : '2px solid rgba(255,255,255,0.05)', paddingLeft: selectedBlockId ? '0' : '20px' }}>
+
+                                                    {/* Mostrar cabeceras de sección solo si no estamos viendo un bloque específico */}
+                                                    {!selectedBlockId && (
+                                                        <>
+                                                            <div style={{ fontSize: '10px', color: '#666', marginBottom: '15px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: section.bgColor || 'var(--accent-turquoise)' }}></div>
+                                                                SECCIÓN: {section.title1?.toUpperCase() || 'NUEVA SECCIÓN'}
+                                                            </div>
+
+                                                            {renderEditableField(`block:${section.id}:root:subtitle`, section.subtitle || '')}
+                                                            {renderEditableField(`block:${section.id}:root:title1`, section.title1 || '')}
+                                                            {renderEditableField(`block:${section.id}:root:paragraph1`, section.paragraph1 || '')}
+                                                            {renderEditableField(`block:${section.id}:root:title2`, section.title2 || '')}
+                                                            {renderEditableField(`block:${section.id}:root:paragraph2`, section.paragraph2 || '')}
+                                                            {renderEditableField(`block:${section.id}:root:titleLineHeight`, section.titleLineHeight || '1.1')}
+                                                            {renderEditableField(`block:${section.id}:root:paragraphLineHeight`, section.paragraphLineHeight || '1.5')}
+                                                        </>
+                                                    )}
+
+                                                    {/* Edición SEO individual por bloque de la grilla */}
+                                                    {section.blocks?.filter((b: any) => !selectedBlockId || b.id === selectedBlockId).map((block: any) => (
+                                                        <div key={block.id} style={{ marginTop: '20px', padding: '15px', backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px' }}>
+                                                            <div style={{ fontSize: '10px', color: '#ffb900', marginBottom: '15px', display: 'flex', flexDirection: 'column', gap: '10px', fontWeight: 800 }}>
+                                                                <span style={{ textTransform: 'uppercase', letterSpacing: '1px' }}>
+                                                                    🖼️ BLOQUE: {block.label || 'SIN NOMBRE'}
+                                                                </span>
+
+                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                                                    <div style={{ fontSize: '9px', fontWeight: 800, color: '#666', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                                                                        Motor de Contenido
+                                                                    </div>
+
+                                                                    {/* Panel de Control SKU */}
+                                                                    <div style={{
+                                                                        display: 'flex', gap: '8px', background: 'rgba(0, 212, 189, 0.05)',
+                                                                        padding: '8px', borderRadius: '6px', border: '1px solid rgba(0, 212, 189, 0.1)',
+                                                                        alignItems: 'center'
+                                                                    }}>
+                                                                        <input
+                                                                            type="text"
+                                                                            placeholder="Extraer por SKU Exacto..."
+                                                                            value={blockInputs[block.id]?.sku || ''}
+                                                                            onChange={(e) => setBlockInputs(prev => ({ ...prev, [block.id]: { ...prev[block.id], sku: e.target.value } }))}
+                                                                            style={{ flex: 1, background: 'transparent', border: 'none', color: '#fff', fontSize: '10px', outline: 'none', padding: '0 4px' }}
+                                                                        />
+                                                                        <button
+                                                                            onClick={() => handleMagicBlockSKU(section.id, block)}
+                                                                            disabled={generatingBlock === block.id}
+                                                                            style={{
+                                                                                background: 'rgba(0, 212, 189, 0.15)', border: '1px solid rgba(0, 212, 189, 0.4)', color: '#00d4bd',
+                                                                                padding: '6px 12px', borderRadius: '4px', cursor: generatingBlock === block.id ? 'wait' : 'pointer',
+                                                                                fontSize: '9px', fontWeight: 900, textTransform: 'uppercase', transition: 'all 0.2s ease',
+                                                                                display: 'flex', alignItems: 'center', gap: '4px'
+                                                                            }}
+                                                                        >
+                                                                            {generatingBlock === block.id ? <Loader2 size={10} className="animate-spin" /> : <Database size={10} />}
+                                                                            EXTRAER DATO
+                                                                        </button>
+                                                                    </div>
+
+                                                                    {/* Panel de Control Referencia IA */}
+                                                                    <div style={{
+                                                                        display: 'flex', gap: '8px', background: 'rgba(212,175,55,0.05)',
+                                                                        padding: '8px', borderRadius: '6px', border: '1px solid rgba(212,175,55,0.1)',
+                                                                        alignItems: 'center'
+                                                                    }}>
+                                                                        <input
+                                                                            type="text"
+                                                                            placeholder="Crear con IA (Ref: Ej. Libreta)..."
+                                                                            value={blockInputs[block.id]?.ref || ''}
+                                                                            onChange={(e) => setBlockInputs(prev => ({ ...prev, [block.id]: { ...prev[block.id], ref: e.target.value } }))}
+                                                                            style={{ flex: 1, background: 'transparent', border: 'none', color: '#fff', fontSize: '10px', outline: 'none', padding: '0 4px' }}
+                                                                        />
+                                                                        <button
+                                                                            onClick={() => handleMagicBlockReference(section.id, block)}
+                                                                            disabled={generatingBlock === block.id}
+                                                                            style={{
+                                                                                background: 'rgba(212,175,55,0.15)', border: '1px solid rgba(212,175,55,0.4)', color: 'var(--accent-gold)',
+                                                                                padding: '6px 12px', borderRadius: '4px', cursor: generatingBlock === block.id ? 'wait' : 'pointer',
+                                                                                fontSize: '9px', fontWeight: 900, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '4px',
+                                                                                transition: 'all 0.2s ease'
+                                                                            }}
+                                                                        >
+                                                                            {generatingBlock === block.id ? <Loader2 size={10} className="animate-spin" /> : <Sparkles size={10} />}
+                                                                            GENERAR ALTO IMPACTO
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+
+                                                            </div>
+
+                                                            {renderEditableField(`block:${section.id}:${block.id}:blockTitle`, block.blockTitle || '')}
+                                                            {renderEditableField(`block:${section.id}:${block.id}:blockParagraph`, block.blockParagraph || '')}
+                                                            {renderEditableField(`block:${section.id}:${block.id}:alt_text`, block.alt_text || '')}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            );
+                                        })}
+                                    </>
                                 ) : (
                                     // Renderizado estándar para secciones fijas (Hero, etc)
-                                    Object.entries(getSelectedContent()).map(([key, value]) => {
-                                        if (typeof value === 'object' && !Array.isArray(value)) return null;
-                                        if (Array.isArray(value)) return null;
-                                        // Filtramos campos redundantes si ya los procesamos antes o si son obsoletos
-                                        if (key === 'subtitle' || key === 'title2' || key === 'paragraph2' || key === 'title_2' || key === 'description_2') return null;
-                                        return renderEditableField(key, value);
-                                    })
-                                )}
-                            </div>
-                        ) : activeTab === 'analyze' ? (
-                            <div>
-                                {/* Botón para analizar toda la sección */}
-                                <button
-                                    onClick={() => {
-                                        const content = getSelectedContent();
-                                        const allText = Object.values(content)
-                                            .filter(v => typeof v === 'string')
-                                            .join(' ');
-                                        handleAnalyze(allText);
-                                    }}
-                                    disabled={analyzing}
-                                    style={{
-                                        width: '100%',
-                                        padding: '16px',
-                                        backgroundColor: analyzing ? 'rgba(0, 212, 189, 0.2)' : 'var(--accent-turquoise)',
-                                        color: analyzing ? 'var(--accent-turquoise)' : 'black',
-                                        border: 'none',
-                                        borderRadius: '8px',
-                                        fontSize: '12px',
-                                        fontWeight: '800',
-                                        cursor: analyzing ? 'wait' : 'pointer',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        gap: '10px',
-                                        marginBottom: '24px'
-                                    }}
-                                >
-                                    {analyzing ? (
-                                        <>
-                                            <Loader2 size={18} className="animate-spin" />
-                                            ANALIZANDO {SECTION_LABELS[selectedSection || '']?.toUpperCase()}...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <BarChart3 size={18} />
-                                            ANALIZAR {SECTION_LABELS[selectedSection || '']?.toUpperCase()}
-                                        </>
-                                    )}
-                                </button>
-
-                                {analysis ? (
-                                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                                        <div style={{
-                                            padding: '24px',
-                                            backgroundColor: 'rgba(0, 212, 189, 0.1)',
-                                            borderRadius: '12px',
-                                            marginBottom: '20px',
-                                            textAlign: 'center'
-                                        }}>
-                                            <div style={{
-                                                fontSize: '48px',
-                                                fontWeight: '800',
-                                                color: analysis.score >= 70 ? 'var(--accent-turquoise)' : analysis.score >= 40 ? 'var(--accent-gold)' : '#ef4444'
-                                            }}>
-                                                {analysis.score}
-                                            </div>
-                                            <div style={{ color: '#888', fontSize: '12px', textTransform: 'uppercase' }}>
-                                                Puntuación SEO
-                                            </div>
-                                        </div>
-
-                                        {/* Botón de Auto-Optimización Basado en Sugerencias */}
-                                        <button
-                                            onClick={handleAutoOptimize}
-                                            disabled={autoOptimizing}
-                                            style={{
-                                                width: '100%',
-                                                padding: '16px',
-                                                backgroundColor: 'rgba(212, 175, 55, 0.15)',
-                                                color: 'var(--accent-gold)',
-                                                border: '1px solid var(--accent-gold)',
-                                                borderRadius: '8px',
-                                                fontSize: '11px',
-                                                fontWeight: '800',
-                                                cursor: 'pointer',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                gap: '10px',
-                                                marginBottom: '30px'
-                                            }}
-                                        >
-                                            {autoOptimizing ? (
-                                                <>
-                                                    <Loader2 size={16} className="animate-spin" />
-                                                    GENERANDO MEJORAS...
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <Sparkles size={16} />
-                                                    EJECUTAR MEJORAS SUGERIDAS CON IA
-                                                </>
-                                            )}
-                                        </button>
-
-                                        {optimizationDraft && (
-                                            <motion.div
-                                                initial={{ opacity: 0, scale: 0.95 }}
-                                                animate={{ opacity: 1, scale: 1 }}
-                                                style={{
-                                                    padding: '20px',
-                                                    backgroundColor: 'rgba(255,255,255,0.03)',
-                                                    border: '1px solid rgba(255,255,255,0.1)',
-                                                    borderRadius: '12px',
-                                                    marginBottom: '24px'
-                                                }}
-                                            >
-                                                <h4 style={{ color: 'var(--accent-gold)', fontSize: '11px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                    <Check size={14} /> VISTA PREVIA DE OPTIMIZACIÓN
-                                                </h4>
-                                                {Object.entries(optimizationDraft).map(([key, value]) => (
-                                                    <div key={key} style={{ marginBottom: '12px' }}>
-                                                        <div style={{ fontSize: '9px', color: '#666', marginBottom: '4px' }}>{key.toUpperCase()}</div>
-                                                        <div style={{ fontSize: '13px', color: '#ccc', lineHeight: '1.4' }}>{value}</div>
-                                                    </div>
-                                                ))}
+                                    <div>
+                                        {/* ── BOTÓN GENERAR CON CATÁLOGO (solo en Hero) ── */}
+                                        {selectedSection === 'hero' && (
+                                            <div style={{ marginBottom: '20px' }}>
                                                 <button
-                                                    onClick={applyGlobalOptimization}
+                                                    onClick={handleMagicHero}
+                                                    disabled={generatingHero}
                                                     style={{
                                                         width: '100%',
-                                                        padding: '12px',
-                                                        backgroundColor: 'var(--accent-turquoise)',
-                                                        color: 'black',
-                                                        border: 'none',
-                                                        borderRadius: '6px',
+                                                        background: 'linear-gradient(90deg, rgba(0,212,189,0.1) 0%, rgba(212,175,55,0.1) 100%)',
+                                                        border: '1px solid rgba(0,212,189,0.3)',
+                                                        color: '#00d4bd',
+                                                        padding: '14px',
+                                                        borderRadius: '8px',
+                                                        cursor: generatingHero ? 'wait' : 'pointer',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        gap: '10px',
                                                         fontSize: '11px',
-                                                        fontWeight: '900',
-                                                        marginTop: '16px',
-                                                        cursor: 'pointer'
+                                                        fontWeight: 900,
+                                                        textTransform: 'uppercase',
+                                                        letterSpacing: '1px',
+                                                        transition: 'all 0.3s'
                                                     }}
                                                 >
-                                                    APLICAR TODAS LAS MEJORAS
+                                                    {generatingHero
+                                                        ? <><Loader2 size={14} className="animate-spin" /> ANALIZANDO CATÁLOGO ({contextCategory})...</>
+                                                        : <><Sparkles size={14} /> GENERAR HERO CON DATOS DEL CATÁLOGO</>
+                                                    }
                                                 </button>
-                                            </motion.div>
+
+                                                {/* Panel de borrador generado */}
+                                                {heroDraft && (
+                                                    <motion.div
+                                                        initial={{ opacity: 0, y: 10 }}
+                                                        animate={{ opacity: 1, y: 0 }}
+                                                        style={{
+                                                            marginTop: '12px',
+                                                            padding: '16px',
+                                                            backgroundColor: 'rgba(212,175,55,0.06)',
+                                                            border: '1px solid rgba(212,175,55,0.3)',
+                                                            borderRadius: '10px'
+                                                        }}
+                                                    >
+                                                        <div style={{ fontSize: '10px', fontWeight: 900, color: 'var(--accent-gold)', marginBottom: '12px', letterSpacing: '1px' }}>
+                                                            ✨ BORRADOR GENERADO — CONTEXTO: {contextCategory}
+                                                        </div>
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '14px' }}>
+                                                            <div style={{ fontSize: '9px', color: '#666', textTransform: 'uppercase', letterSpacing: '1px' }}>TÍTULO H1</div>
+                                                            <p style={{ margin: 0, color: 'white', fontSize: '15px', fontWeight: 700, lineHeight: 1.3 }}>{heroDraft.title1}</p>
+                                                            <div style={{ width: '30px', height: '1px', backgroundColor: 'var(--accent-gold)', opacity: 0.5 }} />
+                                                            <div style={{ fontSize: '9px', color: '#666', textTransform: 'uppercase', letterSpacing: '1px' }}>BAJADA</div>
+                                                            <p style={{ margin: 0, color: '#ccc', fontSize: '12px', lineHeight: 1.6 }}>{heroDraft.paragraph1}</p>
+                                                            <div style={{ width: '30px', height: '1px', backgroundColor: 'var(--accent-gold)', opacity: 0.5 }} />
+                                                            <div style={{ fontSize: '9px', color: '#666', textTransform: 'uppercase', letterSpacing: '1px' }}>CTA</div>
+                                                            <p style={{ margin: 0, color: '#00d4bd', fontSize: '11px', fontWeight: 900, letterSpacing: '2px' }}>[{heroDraft.cta_text}]</p>
+                                                        </div>
+                                                        <div style={{ display: 'flex', gap: '8px' }}>
+                                                            <button
+                                                                onClick={applyHeroDraft}
+                                                                disabled={saving}
+                                                                style={{ flex: 1, padding: '10px', backgroundColor: 'var(--accent-gold)', color: 'black', border: 'none', borderRadius: '6px', fontSize: '11px', fontWeight: 900, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                                                            >
+                                                                {saving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} APLICAR Y GUARDAR
+                                                            </button>
+                                                            <button
+                                                                onClick={() => setHeroDraft(null)}
+                                                                style={{ padding: '10px 16px', backgroundColor: 'rgba(255,255,255,0.05)', color: '#888', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
+                                                            >
+                                                                DESCARTAR
+                                                            </button>
+                                                        </div>
+                                                    </motion.div>
+                                                )}
+                                            </div>
                                         )}
 
-                                        <div style={{ marginBottom: '20px' }}>
-                                            <h4 style={{ color: 'var(--accent-turquoise)', fontSize: '12px', marginBottom: '12px' }}>
-                                                ✓ Fortalezas
-                                            </h4>
-                                            {analysis.strengths?.map((s, i) => (
-                                                <p key={i} style={{ color: '#aaa', fontSize: '13px', marginBottom: '8px' }}>• {s}</p>
-                                            ))}
-                                        </div>
-
-                                        <div style={{ marginBottom: '20px' }}>
-                                            <h4 style={{ color: '#ef4444', fontSize: '12px', marginBottom: '12px' }}>
-                                                ✗ Debilidades
-                                            </h4>
-                                            {analysis.weaknesses?.map((w, i) => (
-                                                <p key={i} style={{ color: '#aaa', fontSize: '13px', marginBottom: '8px' }}>• {w}</p>
-                                            ))}
-                                        </div>
-
-                                        <div>
-                                            <h4 style={{ color: 'var(--accent-gold)', fontSize: '12px', marginBottom: '12px' }}>
-                                                💡 Sugerencias
-                                            </h4>
-                                            {analysis.suggestions?.map((s, i) => (
-                                                <p key={i} style={{ color: '#aaa', fontSize: '13px', marginBottom: '8px' }}>• {s}</p>
-                                            ))}
-                                        </div>
-                                    </motion.div>
-                                ) : (
-                                    <div style={{ textAlign: 'center', padding: '40px 0', color: '#555' }}>
-                                        <BarChart3 size={48} style={{ marginBottom: '16px', opacity: 0.3 }} />
-                                        <p style={{ fontSize: '12px' }}>Haz clic en el botón para analizar el contenido SEO</p>
+                                        {/* Campos individuales */}
+                                        {Object.entries(getSelectedContent()).map(([key, value]) => {
+                                            if (typeof value === 'object' && !Array.isArray(value)) return null;
+                                            if (Array.isArray(value)) return null;
+                                            if (key === 'subtitle' || key === 'title2' || key === 'paragraph2' || key === 'title_2' || key === 'description_2') return null;
+                                            return renderEditableField(key, value);
+                                        })}
                                     </div>
                                 )}
                             </div>
+                        ) : activeTab === 'analyze' ? (
+                            <LandingAuditor
+                                webContent={webContent}
+                                onFetchSeoApi={async (payload) => {
+                                    const r = await fetch('/api/seo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                                    return r.json();
+                                }}
+                            />
                         ) : activeTab === 'audit' ? (
                             <div>
                                 {/* Auditoría SEO completa */}

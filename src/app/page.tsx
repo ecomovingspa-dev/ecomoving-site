@@ -12,7 +12,9 @@ import VisualGallery from '@/components/VisualGallery';
 import SectionComposer from '@/components/SectionComposer';
 import ProjectLauncher from '@/components/ProjectLauncher';
 import ExportModal from '@/components/ExportModal';
-import PremiumCollection from '@/components/PremiumLanding/PremiumCollection';
+import BlockInspector from '@/components/BlockInspector';
+import PeekCarousel from '@/components/PeekCarousel';
+
 
 interface Project {
   id: string;
@@ -24,14 +26,25 @@ interface Project {
   status: 'online' | 'ready';
 }
 
-const BentoBlock = ({ block, designMode, assets, handleDrop }: {
+const BentoBlock = ({ block, designMode, assets, handleDrop, entryIndex, onClick, isSelected }: {
   block: any,
   designMode: boolean,
   assets: any,
-  handleDrop: (e: React.DragEvent, id: string) => void
+  handleDrop: (e: React.DragEvent, id: string) => void,
+  entryIndex: number,
+  onClick?: () => void,
+  isSelected?: boolean
 }) => {
+  const cardRef = React.useRef<HTMLDivElement>(null);
   const [currentIdx, setCurrentIdx] = useState(0);
-  const images = block.gallery && block.gallery.length > 0 ? block.gallery : [block.image].filter(Boolean);
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const [isHovered, setIsHovered] = useState(false);
+  // ── PRIORIDAD: override manual (drag) > gallery del bloque > imagen del bloque ──
+  const baseImages = block.gallery && block.gallery.length > 0 ? block.gallery : [block.image].filter(Boolean);
+  // En modo 'peek', la galería tiene prioridad: el localStorage override es una sola imagen
+  // y rompería el carrusel. Solo se aplica el override en modos de slideshow normales.
+  const isPeek = ['peek', 'full-carousel'].includes(block.galleryAnimation) && baseImages.length >= 2;
+  const images = (!isPeek && assets[block.id]) ? [assets[block.id]] : baseImages;
   const [spanW, spanH] = (block.span || '4x1').split('x').map((n: string) => parseInt(n) || 1);
   const isText = block.type === 'text' || block.type === 'both';
   const isImage = block.type === 'image' || block.type === 'both' || !block.type;
@@ -43,85 +56,109 @@ const BentoBlock = ({ block, designMode, assets, handleDrop }: {
     neon: `0 0 30px ${block.bgColor}88`
   };
 
-  // Transformaciones Expertas Actualizadas (Zoom + Posición)
   const zoom = block.transform_zoom || 1;
-  const posX = block.transform_posX ?? 50; // Default: 50% (Centro)
-  const posY = block.transform_posY ?? 50; // Default: 50% (Centro)
+  const posX = block.transform_posX ?? 50;
+  const posY = block.transform_posY ?? 50;
   const aspectRatio = block.transform_aspectRatio || (block.isCircle ? '1/1' : 'auto');
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!cardRef.current) return;
+    const rect = cardRef.current.getBoundingClientRect();
+    setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+  };
 
   useEffect(() => {
     if (images.length > 1) {
       const interval = setInterval(() => {
         setCurrentIdx((prev) => (prev + 1) % images.length);
-      }, 4000); // 4 segundos por diapositiva
+      }, 4000);
       return () => clearInterval(interval);
     }
   }, [images.length]);
 
-  // Definición dinámica de animaciones según block.galleryAnimation
   const anim = useMemo(() => {
     const type = block.galleryAnimation || 'fade';
+    const targetScale = isHovered ? zoom * 1.06 : zoom;
+
     switch (type) {
       case 'slide-h':
-        return {
-          initial: { opacity: 0, x: 100 },
-          animate: { opacity: 1, x: 0, scale: zoom },
-          exit: { opacity: 0, x: -100 }
-        };
+        return { initial: { opacity: 0, x: '100%' }, animate: { opacity: 1, x: 0, scale: targetScale }, exit: { opacity: 0, x: '-100%' } };
       case 'slide-v':
-        return {
-          initial: { opacity: 0, y: 100 },
-          animate: { opacity: 1, y: 0, scale: zoom },
-          exit: { opacity: 0, y: -100 }
-        };
+        return { initial: { opacity: 0, y: '100%' }, animate: { opacity: 1, y: 0, scale: targetScale }, exit: { opacity: 0, y: '-100%' } };
       case 'zoom':
-        return {
-          initial: { opacity: 0, scale: zoom * 0.5 },
-          animate: { opacity: 1, scale: zoom },
-          exit: { opacity: 0, scale: zoom * 1.5 }
-        };
+        return { initial: { opacity: 0, scale: targetScale * 0.5 }, animate: { opacity: 1, scale: targetScale }, exit: { opacity: 0, scale: targetScale * 1.5 } };
       case 'none':
-        return {
-          initial: { opacity: 1, scale: zoom },
-          animate: { opacity: 1, scale: zoom },
-          exit: { opacity: 1, scale: zoom }
-        };
-      default: // fade
-        return {
-          initial: { opacity: 0, scale: 1.05 },
-          animate: { opacity: 1, scale: zoom },
-          exit: { opacity: 0, scale: 0.95 }
-        };
+        return { initial: { opacity: 1, scale: targetScale }, animate: { opacity: 1, scale: targetScale }, exit: { opacity: 1, scale: targetScale } };
+      case 'crossfade':
+        return { initial: { opacity: 0, scale: targetScale }, animate: { opacity: 1, scale: targetScale }, exit: { opacity: 0, scale: targetScale } };
+      default:
+        // fade (con ligero scale/desfase)
+        return { initial: { opacity: 0, scale: targetScale * 1.02 }, animate: { opacity: 1, scale: targetScale }, exit: { opacity: 0, scale: targetScale * 0.98 } };
     }
-  }, [block.galleryAnimation, zoom]);
+  }, [block.galleryAnimation, zoom, isHovered]);
 
   return (
     <motion.div
+      ref={cardRef}
       layoutId={block.id}
+      // ── CONCEPTO PREMIUM: entrada escalonada desde abajo al hacer scroll ──
+      initial={{ opacity: 0, y: 40 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: '-80px' }}
+      transition={{ delay: (entryIndex % 6) * 0.08, duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+      onMouseMove={handleMouseMove}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       style={{
-        gridColumn: `${(block.col * 2) - 1} / span ${spanW * 2}`, // Escalamos a 48 columnas (2x)
-        gridRow: `${(block.row * 6) - 5} / span ${spanH * 6}`,    // Escalamos a filas de 15px (6x para llegar a 90px)
+        gridColumn: `${(block.col * 2) - 1} / span ${spanW * 2}`,
+        gridRow: `${(block.row * 6) - 5} / span ${spanH * 6}`,
         zIndex: block.zIndex || 1,
         position: 'relative',
         background: block.gradient
           ? `linear-gradient(135deg, ${block.bgColor}, ${block.bgColor}dd)`
           : (block.bgColor || '#111'),
-        borderRadius: block.isCircle ? '50%' : (block.borderRadius || '12px'), // 12px según constructor.pdf
+        borderRadius: block.isCircle ? '50%' : (block.borderRadius || '12px'),
         aspectRatio: aspectRatio,
-        boxShadow: shadowStyles[block.shadow as keyof typeof shadowStyles] || shadowStyles.none,
+        boxShadow: isHovered
+          ? (shadowStyles[block.shadow as keyof typeof shadowStyles] || '0 20px 60px rgba(0,0,0,0.5)')
+          : (shadowStyles[block.shadow as keyof typeof shadowStyles] || shadowStyles.none),
         backdropFilter: block.blur ? `blur(${block.blur})` : 'none',
         overflow: 'hidden',
         display: 'flex', flexDirection: 'column',
         justifyContent: 'center', alignItems: 'center',
         padding: isText ? '40px' : '0',
-        border: designMode ? '1px solid var(--eco-accent-primary)' : (block.borderColor ? `1px solid ${block.borderColor}` : 'none'),
-        cursor: block.link ? 'pointer' : 'default',
-        margin: '4px', // Aire para que no se corten los bordes/curvas
-        transition: 'all 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94)'
+        border: designMode
+          ? isSelected
+            ? '2px solid var(--eco-accent-primary)'
+            : '1px dashed rgba(0,212,189,0.3)'
+          : (isHovered
+            ? `1px solid ${block.borderColor || 'rgba(255,255,255,0.10)'}`
+            : `1px solid ${block.borderColor || 'rgba(255,255,255,0.03)'}`),
+        cursor: designMode ? 'pointer' : (block.link ? 'pointer' : 'default'),
+        margin: '4px',
+        transition: 'border-color 0.4s ease, box-shadow 0.4s ease, transform 0.4s cubic-bezier(0.16,1,0.3,1)'
       }}
+      whileHover={!designMode ? { scale: 1.012, y: -4 } : {}}
+      onClick={designMode && onClick ? onClick : undefined}
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => handleDrop(e, block.id)}
     >
+      {/* ── CONCEPTO PREMIUM: Spotlight radial que sigue al cursor ── */}
+      {!designMode && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 10,
+            borderRadius: 'inherit',
+            pointerEvents: 'none',
+            background: `radial-gradient(500px circle at ${mousePos.x}px ${mousePos.y}px, rgba(255,255,255,0.055), transparent 45%)`,
+            opacity: isHovered ? 1 : 0,
+            transition: 'opacity 0.3s ease'
+          }}
+        />
+      )}
+
       {designMode && (
         <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 10, background: 'rgba(255,255,255,0.1)', color: 'white', fontSize: '9px', padding: '2px 6px', borderRadius: '4px', opacity: 0.5 }}>
           {block.label}
@@ -130,46 +167,48 @@ const BentoBlock = ({ block, designMode, assets, handleDrop }: {
 
       {isImage && (
         <div style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow: 'hidden' }}>
-          <AnimatePresence mode="wait">
-            <motion.img
-              key={`${block.id}-${currentIdx}`}
-              initial={anim.initial}
-              animate={anim.animate}
-              exit={anim.exit}
-              transition={{
-                duration: 0.8,
-                ease: [0.4, 0, 0.2, 1] // Curva suave profesional
-              }}
-              src={images[currentIdx] || assets[block.id] || 'https://via.placeholder.com/800x600?text=Ecomoving'}
-              style={{
-                width: '100%', height: '100%',
-                objectFit: 'cover',
-                // Posición dinámica controlada por el usuario (X%, Y%)
-                objectPosition: `${posX}% ${posY}%`,
-                opacity: block.type === 'both' ? 0.4 : 1,
-                zIndex: 1,
-                transition: 'object-position 0.2s ease-out' // Transición suave al arrastrar sliders
-              }}
-              alt={block.label}
-            />
-          </AnimatePresence>
+          {/* ── MODO CARRUSEL INTERACTIVO ── */}
+          {block.galleryAnimation === 'peek' && images.length >= 2 ? (
+            <PeekCarousel images={images} mode="peek" />
+          ) : block.galleryAnimation === 'full-carousel' && images.length >= 2 ? (
+            <PeekCarousel images={images} mode="full" />
+          ) : (
+            <AnimatePresence mode="wait">
+              <motion.img
+                key={`${block.id}-${currentIdx}`}
+                initial={anim.initial}
+                animate={anim.animate}
+                exit={anim.exit}
+                transition={{ duration: 0.8, ease: [0.4, 0, 0.2, 1] }}
+                src={images[currentIdx] || 'https://via.placeholder.com/800x600?text=Ecomoving'}
+                style={{
+                  position: 'absolute',
+                  width: '100%', height: '100%',
+                  objectFit: 'cover',
+                  objectPosition: `${posX}% ${posY}%`,
+                  opacity: block.type === 'both' ? 0.4 : 1,
+                  zIndex: 1,
+                  transition: 'object-position 0.2s ease-out'
+                }}
+                alt={block.label}
+              />
+            </AnimatePresence>
+          )}
         </div>
       )}
 
-      {/* CONTEXTO EDITORIAL (Título y Párrafo flotante) */}
-      {(block.blockTitle || block.blockParagraph) && (
+      {/* CONTEXTO EDITORIAL */}
+      {(block.blockTitle || block.blockParagraph || block.link) && (
         <div style={{
           position: 'absolute',
-          top: '30px',
-          left: '30px',
-          right: '30px',
-          bottom: '30px',
-          zIndex: 20,
-          pointerEvents: 'none',
-          display: 'flex',
-          flexDirection: 'column',
+          top: block.textPadding ? (block.textPadding.includes(' ') ? block.textPadding.split(' ')[0] : block.textPadding) : '30px',
+          left: block.textPadding ? (block.textPadding.includes(' ') ? block.textPadding.split(' ')[1] || block.textPadding.split(' ')[0] : block.textPadding) : '30px',
+          right: block.textPadding ? (block.textPadding.includes(' ') ? block.textPadding.split(' ')[1] || block.textPadding.split(' ')[0] : block.textPadding) : '30px',
+          bottom: block.textPadding ? (block.textPadding.includes(' ') ? block.textPadding.split(' ')[0] : block.textPadding) : '30px',
+          zIndex: 20, pointerEvents: 'none',
+          display: 'flex', flexDirection: 'column',
           alignItems: block.textAlign === 'center' ? 'center' : (block.textAlign === 'right' ? 'flex-end' : 'flex-start'),
-          justifyContent: 'flex-start'
+          justifyContent: block.textVerticalAlign || 'flex-start'
         }}>
           {block.blockTitle && (
             <h2 style={{
@@ -180,37 +219,61 @@ const BentoBlock = ({ block, designMode, assets, handleDrop }: {
               textAlign: block.textAlign || 'left',
               textTransform: block.textTransform || 'none',
               letterSpacing: block.letterSpacing || 'normal',
-              fontFamily: 'var(--eco-font-display)', // Forzamos Bebas Neue para títulos display
+              fontFamily: 'var(--eco-font-display)',
               textShadow: '0 4px 20px rgba(0,0,0,0.6)',
-              lineHeight: 1.1,
-              maxWidth: '90%'
+              lineHeight: block.titleLineHeight || 1.1,
+              maxWidth: block.textMaxWidth || '90%'
             }}>
               {block.blockTitle}
             </h2>
           )}
-
           {block.blockTitle && block.blockParagraph && (
-            <div style={{ width: '40px', height: '1px', backgroundColor: 'var(--eco-accent-primary)', margin: '0 0 15px 0', opacity: 0.8 }} />
+            <div style={{ width: '40px', height: '1px', backgroundColor: 'var(--eco-accent-primary)', margin: `0 0 ${block.textGap || '15px'} 0`, opacity: 0.8 }} />
           )}
-
           {block.blockParagraph && (
             <p style={{
-              margin: 0,
+              margin: '0 0 20px 0',
               color: block.textColor ? `${block.textColor}dd` : '#cccccc',
-              fontSize: '1rem',
-              fontWeight: 400,
+              fontSize: block.paragraphSize || '1rem', fontWeight: 400,
               textAlign: block.textAlign || 'left',
               lineHeight: block.lineHeight || '1.5',
               fontStyle: block.fontStyle || 'normal',
-              maxWidth: '600px',
+              maxWidth: block.textMaxWidth || '600px',
               textShadow: '0 2px 10px rgba(0,0,0,0.8)'
             }}>
               {block.blockParagraph}
             </p>
           )}
+
+          {/* Botón CTA inyectado por la IA */}
+          {block.link && (
+            <div
+              style={{
+                marginTop: 'auto', // Lo empuja hacia abajo si es que hay espacio
+                padding: '10px 24px',
+                backgroundColor: 'var(--eco-accent-primary)',
+                color: 'black',
+                fontWeight: 800,
+                fontSize: '12px',
+                letterSpacing: '1.5px',
+                textTransform: 'uppercase',
+                borderRadius: '4px',
+                boxShadow: '0 4px 15px rgba(0,212,189,0.4)',
+                pointerEvents: 'auto', // Permite click a pesar del puntero padre
+                transition: 'transform 0.2s',
+              }}
+              onClick={(e) => {
+                if (!designMode) {
+                  e.stopPropagation();
+                  window.location.href = block.link;
+                }
+              }}
+            >
+              VER DETALLE
+            </div>
+          )}
         </div>
       )}
-
     </motion.div>
   );
 };
@@ -233,7 +296,9 @@ export default function Home() {
   const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [designMode, setDesignMode] = useState(false);
+  const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [isDeploying, setIsDeploying] = useState(false);
+  const [currentHeroSlide, setCurrentHeroSlide] = useState(0);
 
   const [previewSections, setPreviewSections] = useState<DynamicSection[] | null>(null);
 
@@ -251,10 +316,102 @@ export default function Home() {
     setIsComposerOpen(false);
   }, []);
 
+  // ── Inspector: actualizar un bloque y guardar en Supabase ──
+  const handleBlockUpdate = useCallback((blockId: string, updates: Partial<any>) => {
+    const source = previewSections || content?.sections;
+    if (!Array.isArray(source)) return;
+    const newSections = source.map((s: any) => {
+      if (!s.blocks) return s;
+      return { ...s, blocks: s.blocks.map((b: any) => b.id === blockId ? { ...b, ...updates } : b) };
+    });
+    setPreviewSections(newSections);
+    // Guarda con debounce implícito (lo maneja el Inspector)
+    updateSection('sections', newSections);
+  }, [previewSections, content, updateSection]);
+
+  const handleBlockDelete = useCallback((blockId: string) => {
+    const source = previewSections || content?.sections;
+    if (!Array.isArray(source)) return;
+    const newSections = source.map((s: any) => ({
+      ...s, blocks: (s.blocks || []).filter((b: any) => b.id !== blockId)
+    }));
+    setPreviewSections(newSections);
+    updateSection('sections', newSections);
+    setSelectedBlockId(null);
+  }, [previewSections, content, updateSection]);
+
+  // ── Agregar bloque nuevo ──
+  const handleAddBlock = useCallback(() => {
+    const source = previewSections || content?.sections;
+    if (!Array.isArray(source)) return;
+    const ms = source.find((s: any) => s.id === 'infinite_grid') || (source.length === 1 ? source[0] : null);
+    if (!ms) return;
+    const blocks = ms.blocks || [];
+    const nextRow = blocks.reduce((acc: number, b: any) => {
+      const [, h] = (b.span || '4x2').split('x').map(Number);
+      return Math.max(acc, (b.row || 1) + (h || 2) + 3);
+    }, 1);
+    const newBlock = {
+      id: `block_${Date.now()}`,
+      label: 'NUEVO BLOQUE', type: 'image',
+      span: '12x8', col: 1, row: nextRow,
+      zIndex: 1, opacity: 1, borderRadius: '0px', shadow: 'none' as const,
+      textAlign: 'center' as const, gallery: []
+    };
+    const newSections = source.map((s: any) =>
+      s.id === ms.id ? { ...s, blocks: [...(s.blocks || []), newBlock] } : s
+    );
+    setPreviewSections(newSections);
+    updateSection('sections', newSections);
+    setSelectedBlockId(newBlock.id);
+  }, [previewSections, content, updateSection]);
+
+  // ── Cambiar color de fondo del lienzo ──
+  const handleCanvasBgChange = useCallback((color: string) => {
+    const source = previewSections || content?.sections;
+    if (!Array.isArray(source)) return;
+    const newSections = source.map((s: any) =>
+      s.id === 'infinite_grid' || (source.length === 1) ? { ...s, bgColor: color } : s
+    );
+    setPreviewSections(newSections);
+    updateSection('sections', newSections);
+  }, [previewSections, content, updateSection]);
+
   useEffect(() => {
     const saved = localStorage.getItem('ecomoving_assets');
-    if (saved) setAssets(JSON.parse(saved));
+    if (saved) {
+      try {
+        setAssets(JSON.parse(saved));
+      } catch {
+        localStorage.removeItem('ecomoving_assets');
+      }
+    }
   }, []);
+
+  // ── Purga de huérfanos: cuando cambia el contenido, limpia keys obsoletas del localStorage ──
+  useEffect(() => {
+    const source = previewSections || content?.sections;
+    let blocks: any[] | undefined;
+    if (Array.isArray(source)) {
+      const ms = source.find((s: any) => s.id === 'infinite_grid') || (source.length === 1 ? source[0] : null);
+      blocks = ms?.blocks;
+    } else if (source) {
+      const ms = (source as any)['infinite_grid'] || (Object.values(source).length === 1 ? Object.values(source)[0] : null);
+      blocks = (ms as any)?.blocks;
+    }
+    if (!blocks || blocks.length === 0) return;
+    const saved = localStorage.getItem('ecomoving_assets');
+    if (!saved) return;
+    try {
+      const stored: Record<string, string> = JSON.parse(saved);
+      const validIds = new Set(['hero', ...blocks.map((b: any) => b.id)]);
+      const cleaned = Object.fromEntries(Object.entries(stored).filter(([k]) => validIds.has(k)));
+      if (Object.keys(cleaned).length !== Object.keys(stored).length) {
+        localStorage.setItem('ecomoving_assets', JSON.stringify(cleaned));
+        setAssets(cleaned);
+      }
+    } catch { /* safe to ignore */ }
+  }, [content, previewSections]);
 
   const handleDeploy = async () => {
     if (!confirm('¿Estás seguro de enviar los cambios a GitHub? Esto actualizará el sitio web público.')) return;
@@ -276,22 +433,39 @@ export default function Home() {
 
   const handleDrop = async (e: React.DragEvent, blockId: string) => {
     e.preventDefault();
-    const url = e.dataTransfer.getData('image_url');
+    const url = e.dataTransfer.getData('image_url')?.trim();
     if (!url) return;
-
+    // Sobreescribe la key del bloque → no acumula basura, 1 slot = 1 URL
     const newAssets = { ...assets, [blockId]: url };
     setAssets(newAssets);
     localStorage.setItem('ecomoving_assets', JSON.stringify(newAssets));
   };
 
 
+  const heroContent = content?.hero || { title1: 'ECOMOVING', cta_text: 'EXPLORAR', cta_link: '#' };
+
+  const heroImages = useMemo(() => {
+    return [
+      (heroContent as any).background_image || assets.hero,
+      (heroContent as any).background_image_2,
+      (heroContent as any).background_image_3
+    ].filter(Boolean);
+  }, [heroContent, assets.hero]);
+
+  useEffect(() => {
+    if (heroImages.length > 1) {
+      const interval = setInterval(() => {
+        setCurrentHeroSlide(prev => (prev + 1) % heroImages.length);
+      }, 5500); // 5.5s transición premium
+      return () => clearInterval(interval);
+    }
+  }, [heroImages.length]);
+
   if (contentLoading) return <div className='loading-screen'>ECOMOVING SPA</div>;
 
   if (!selectedProject) {
     return <ProjectLauncher onSelect={(p) => setSelectedProject(p)} />;
   }
-
-  const heroContent = content?.hero || { title1: 'ECOMOVING', cta_text: 'EXPLORAR', cta_link: '#' };
 
   // 1. Buscar la sección maestra (Soporte Live Preview)
   const source = previewSections || content?.sections;
@@ -341,14 +515,14 @@ export default function Home() {
 
           <button onClick={() => setIsCatalogHubOpen(true)} className='nav-btn'><Layout size={16} /> HUB</button>
           <button onClick={() => setIsBibliotecaOpen(true)} className='nav-btn'><ImageIcon size={16} /> BIBLIOTECA</button>
-          <button onClick={() => setIsComposerOpen(true)} className='nav-btn'><Layers size={16} /> COMPOSER</button>
           <button onClick={() => setIsEditorSEOOpen(true)} className='nav-btn'><FileText size={16} /> SEO</button>
-
           {selectedProject.type === 'public' && (
-            <button onClick={() => setIsExportModalOpen(true)} className='nav-btn' style={{ background: 'var(--accent-gold)11', color: 'var(--accent-gold)', borderColor: 'var(--accent-gold)33' }}><Send size={16} /> PREPARAR EXPORTACIÓN</button>
+            <button onClick={() => setIsExportModalOpen(true)} className='nav-btn' style={{ background: 'var(--accent-gold)11', color: 'var(--accent-gold)', borderColor: 'var(--accent-gold)33' }}><Send size={16} /> EXPORTAR</button>
           )}
-
-          <button onClick={() => setDesignMode(!designMode)} className='nav-btn'><Crop size={16} /> {designMode ? 'VISTA FINAL' : 'DISEÑO'}</button>
+          <button onClick={() => { setDesignMode(!designMode); setSelectedBlockId(null); }} className='nav-btn'
+            style={designMode ? { background: 'rgba(0,212,189,0.15)', color: '#00d4bd', borderColor: 'rgba(0,212,189,0.5)' } : {}}>
+            <Crop size={16} /> {designMode ? '● DISEÑO' : 'DISEÑO'}
+          </button>
         </div>
       </nav>
 
@@ -368,17 +542,47 @@ export default function Home() {
         }}
       >
         <div style={{ position: 'absolute', inset: 0, zIndex: 0 }}>
-          {/* Se usa heroContent con un fallback seguro */}
-          <img src={(heroContent as any).background_image || assets.hero} alt="Ecomoving" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          <AnimatePresence mode="popLayout">
+            <motion.img
+              key={currentHeroSlide}
+              initial={{ opacity: 0, scale: 1.05 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 1.5, ease: [0.4, 0, 0.2, 1] }}
+              src={heroImages[currentHeroSlide] || assets.hero}
+              alt="Ecomoving"
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+            />
+          </AnimatePresence>
           <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(circle, transparent 20%, rgba(0,0,0,0.8) 120%)' }} />
         </div>
+
+        {/* Indicadores de Slide */}
+        {heroImages.length > 1 && (
+          <div style={{ position: 'absolute', bottom: '40px', left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: '10px', zIndex: 10 }}>
+            {heroImages.map((_, idx) => (
+              <div
+                key={idx}
+                onClick={() => setCurrentHeroSlide(idx)}
+                style={{
+                  width: idx === currentHeroSlide ? '30px' : '8px',
+                  height: '4px',
+                  borderRadius: '2px',
+                  background: idx === currentHeroSlide ? 'var(--eco-accent-primary)' : 'rgba(255,255,255,0.3)',
+                  cursor: 'pointer',
+                  transition: 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)'
+                }}
+              />
+            ))}
+          </div>
+        )}
         <div style={{ position: 'relative', zIndex: 2, textAlign: (heroContent as any).text_align_h || 'center', maxWidth: '1000px', width: '100%' }}>
           {(heroContent as any).title1 && (
             <motion.h1
               initial={{ opacity: 0, y: 50 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 1 }}
-              style={{ fontSize: '5rem', fontFamily: 'var(--font-heading)', lineHeight: 1, marginBottom: '20px', textShadow: '0 4px 20px rgba(0,0,0,0.8)' }}
+              style={{ fontSize: '5rem', fontFamily: 'var(--font-heading)', lineHeight: (heroContent as any).titleLineHeight || 1, marginBottom: '20px', textShadow: '0 4px 20px rgba(0,0,0,0.8)' }}
             >
               {(heroContent as any).title1}
             </motion.h1>
@@ -388,7 +592,7 @@ export default function Home() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 1, delay: 0.5 }}
-              style={{ fontSize: '1.5rem', color: '#ccc', marginBottom: '40px', letterSpacing: '2px', textShadow: '0 2px 10px rgba(0,0,0,0.9)' }}
+              style={{ fontSize: '1.5rem', color: '#ccc', marginBottom: '40px', letterSpacing: '2px', textShadow: '0 2px 10px rgba(0,0,0,0.9)', lineHeight: (heroContent as any).paragraphLineHeight || 1.4 }}
             >
               {(heroContent as any).paragraph1}
             </motion.p>
@@ -401,10 +605,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* --- PREMIUM COLLECTION (BENTO VIP) --- */}
-      <div style={{ background: 'var(--eco-bg-primary)' }}> {/* Wrapper para asegurar que el fondo se funda perfectamente con page.tsx que tiene #0A0A0A */}
-        <PremiumCollection />
-      </div>
+
 
       {/* --- INFINITE GRID CANVAS (24 COLUMNS) --- */}
       <section id="infinite-canvas" style={{
@@ -441,13 +642,16 @@ export default function Home() {
           overflow: 'visible'
         }}>
 
-          {hasBlocks && masterSection.blocks.map((block: any) => (
+          {hasBlocks && masterSection.blocks.map((block: any, idx: number) => (
             <BentoBlock
               key={block.id}
               block={block}
               designMode={designMode}
               assets={assets}
-              handleDrop={(e: any) => handleDrop(e, block.id)} // Pasamos el handleDrop real
+              entryIndex={idx}
+              isSelected={selectedBlockId === block.id}
+              onClick={() => setSelectedBlockId(selectedBlockId === block.id ? null : block.id)}
+              handleDrop={(e: any) => handleDrop(e, block.id)}
             />
           ))}
 
@@ -479,7 +683,12 @@ export default function Home() {
         }}
         onChange={handleComposerChange}
       />
-      <EditorSEO isOpen={isEditorSEOOpen} onClose={() => setIsEditorSEOOpen(false)} onContentUpdate={refetchContent} />
+      <EditorSEO isOpen={isEditorSEOOpen} onClose={() => setIsEditorSEOOpen(false)} onContentUpdate={(section, newContent) => {
+        updateSection(section as any, newContent);
+        if (section === 'sections') {
+          setPreviewSections(newContent);
+        }
+      }} selectedBlockId={selectedBlockId} />
       {isBibliotecaOpen && <BibliotecaIA onClose={() => setIsBibliotecaOpen(false)} />}
       <CatalogHub isOpen={isCatalogHubOpen} onClose={() => setIsCatalogHubOpen(false)} />
       <ExportModal
@@ -487,6 +696,31 @@ export default function Home() {
         onClose={() => setIsExportModalOpen(false)}
         project={selectedProject}
       />
+
+      {/* ── INSPECTOR ÚNICO — siempre visible en design mode ── */}
+      <AnimatePresence>
+        {designMode && (() => {
+          const source = previewSections || content?.sections;
+          const ms = Array.isArray(source)
+            ? (source.find((s: any) => s.id === 'infinite_grid') || (source.length === 1 ? source[0] : null))
+            : null;
+          const allBlocks: any[] = ms?.blocks || [];
+          const inspectedBlock = selectedBlockId ? (allBlocks.find((b: any) => b.id === selectedBlockId) || null) : null;
+          return (
+            <BlockInspector
+              block={inspectedBlock}
+              allBlocks={allBlocks}
+              canvasBgColor={ms?.bgColor || '#000000'}
+              onClose={() => setDesignMode(false)}
+              onUpdate={handleBlockUpdate}
+              onDelete={handleBlockDelete}
+              onAddBlock={handleAddBlock}
+              onSelectBlock={(id) => setSelectedBlockId(id || null)}
+              onCanvasBgChange={handleCanvasBgChange}
+            />
+          );
+        })()}
+      </AnimatePresence>
 
       <style jsx global>{`
         .nav-master {

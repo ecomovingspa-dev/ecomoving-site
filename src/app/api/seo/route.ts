@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // Inicializar Gemini
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY || '');
 
 export async function POST(request: NextRequest) {
     try {
@@ -11,19 +11,17 @@ export async function POST(request: NextRequest) {
         if (!action) {
             return NextResponse.json({ error: 'Action is required' }, { status: 400 });
         }
-
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
-
+        const model = genAI.getGenerativeModel({
+            model: 'gemini-1.5-flash',
+            generationConfig: {
+                temperature: 0.9,
+                topP: 0.95,
+                responseMimeType: "application/json"
+            }
+        });
         let prompt = '';
-        let systemContext = `Eres un Redactor SEO Estratégico de Élite para Ecomoving Chile. 
-Tu especialidad es el Merchandising Corporativo y Regalos Empresariales de alto impacto.
-
-REGLAS DE ORO:
-1. MERCADO: Chile (B2B). Uso de términos como "Ventas Corporativas", "Regalos para Empresas", "Merchandising".
-2. TONO: Profesional, elegante (Premium) pero versátil para productos masivos.
-3. ESTILO: Directo, sin rellenos. Máximo impacto con el mínimo de palabras.
-4. VOCABULARIO: Evita el abuso de la palabra "premium". Usa sinónimos como: calidad superior, excelencia, distinción, durabilidad, versatilidad.
-5. CONTEXTO: Entiende que el usuario está editando una sección específica (Mugs, Botellas, etc.). Tus sugerencias DEBEN aludir directamente a esos productos y sus beneficios (ej: botellas térmicas, mugs de cerámica, mochilas ergonómicas).`;
+        let systemContext = `Rol: Redactor SEO B2B para Ecomoving.
+Regla: Prohibido usar frases genéricas pre-armadas. El texto debe ser único y basarse estrictamente en los datos técnicos técnicos y el contexto entregado.`;
 
         switch (action) {
             case 'analyze':
@@ -50,22 +48,15 @@ Responde en formato JSON:
             case 'improve':
                 prompt = `${systemContext}
 
-TAREA: Mejora el siguiente texto.
-SECCIÓN ACTUAL: ${section || 'General'}
-CONTEXTO DE CAMPO: ${context || 'Texto general'}
+INSTRUCCIONES PRINCIPALES DEL FRONTEND:
+${context || 'Mejora este texto'}
 
-Texto original a mejorar:
+Texto a procesar:
 "${text}"
 
-REQUISITOS ADICIONALES:
-- Si la sección es de un producto específico (Mugs, Botellas, etc.), la sugerencia DEBE aludir a ese producto.
-- No inventes información, potencia el mensaje existente.
-
-Responde en formato JSON:
+Responde EXCLUSIVAMENTE en JSON:
 {
-  "improved": "texto mejorado",
-  "keywords_used": ["keyword1", "keyword2"],
-  "reason": "breve explicación del cambio"
+  "improved": "tu_texto_aqui"
 }`;
                 break;
 
@@ -73,14 +64,14 @@ Responde en formato JSON:
                 prompt = `${systemContext}
 
 Genera un nuevo texto optimizado para SEO.
-Sección: ${section}
+            Sección: ${section}
 Tipo de contenido: ${context || 'descripción'}
 
-Requisitos:
-- Máximo 2-3 oraciones para descripciones
-- 5-8 palabras para títulos
-- Incluir al menos 1 keyword principal
-- Tono premium y profesional
+        Requisitos:
+        - Máximo 2 - 3 oraciones para descripciones
+            - 5 - 8 palabras para títulos
+                - Incluir al menos 1 keyword principal
+                    - Tono premium y profesional
 
 Responde en formato JSON:
 {
@@ -100,12 +91,12 @@ Contenido actual de la sección:
 ${JSON.stringify(text)}
 
 Requisitos por campo:
-- Títulos: 5-10 palabras, impactantes y con keyword principal.
-- Párrafos: 2-3 oraciones, informativos y persuasivos.
+        - Títulos: 5 - 10 palabras, impactantes y con keyword principal.
+- Párrafos: 2 - 3 oraciones, informativos y persuasivos.
 
 Responde en formato JSON:
 {
-  "optimized": { ...los mismos campos con el texto mejorado },
+  "optimized": { "...": "" },
   "summary": "Resumen de las mejoras realizadas"
 }`;
                 break;
@@ -117,16 +108,16 @@ Realiza una auditoría SEO completa de los siguientes textos de la landing page:
 
 ${text}
 
-Proporciona:
-1. Puntuación general (0-100)
-2. Análisis por sección
-3. Recomendaciones prioritarias (top 5)
-4. Meta tags sugeridos (title y description)
+        Proporciona:
+        1. Puntuación general(0 - 100)
+        2. Análisis por sección
+        3. Recomendaciones prioritarias(top 5)
+        4. Meta tags sugeridos(title y description)
 
 Responde en formato JSON:
 {
-  "overall_score": number,
-  "section_scores": {"hero": number, "mugs": number},
+  "overall_score": 0,
+  "section_scores": { "hero": 0, "mugs": 0 },
   "priority_recommendations": ["string"],
   "meta_tags": {
     "title": "string (máx 60 caracteres)",
@@ -143,18 +134,30 @@ Responde en formato JSON:
         const response = result.response;
         const textResponse = response.text();
 
-        // Intentar parsear como JSON
+        // Intentar parsear como JSON de forma robusta
+        let parsedData: any = null;
         try {
             const jsonMatch = textResponse.match(/\{[\s\S]*\}/);
             if (jsonMatch) {
-                const parsed = JSON.parse(jsonMatch[0]);
-                return NextResponse.json({ success: true, data: parsed });
+                const cleanedJson = jsonMatch[0].trim();
+                parsedData = JSON.parse(cleanedJson);
             }
-        } catch {
-            // Si no es JSON válido, devolver como texto
+        } catch (e) {
+            console.error('Failed to parse AI JSON:', e);
         }
 
-        return NextResponse.json({ success: true, data: { raw: textResponse } });
+        if (parsedData) {
+            return NextResponse.json({ success: true, data: parsedData });
+        }
+
+        // Si no es JSON, enviarlo como 'improved' para que el frontend lo use directamente
+        return NextResponse.json({
+            success: true,
+            data: {
+                improved: textResponse.replace(/^["']|["']$/g, '').trim(),
+                raw: textResponse
+            }
+        });
 
     } catch (error) {
         console.error('SEO API Error:', error);

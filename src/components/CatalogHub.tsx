@@ -281,7 +281,7 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
         setLoading(true);
 
         try {
-            const target = insumoDestination === 'marketing' ? 'email' : 'web';
+            const target = insumoDestination === 'marketing' ? 'email' : insumoDestination === 'hero' ? 'hero' : 'web';
             const blobs: Blob[] = [];
             const previews: string[] = [];
 
@@ -384,7 +384,7 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
             setInsumoFiles([file]);
             setInsumoFile(file);
 
-            const target = insumoDestination === 'marketing' ? 'email' : 'web';
+            const target = insumoDestination === 'marketing' ? 'email' : insumoDestination === 'hero' ? 'hero' : 'web';
             const { blob: optimizedBlob } = await optimizeImage(file, target, insumoTransform);
 
             const previewUrl = URL.createObjectURL(optimizedBlob);
@@ -410,7 +410,7 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
             const timer = setTimeout(async () => {
                 setLoading(true);
                 try {
-                    const target = insumoDestination === 'marketing' ? 'email' : 'web';
+                    const target = insumoDestination === 'marketing' ? 'email' : insumoDestination === 'hero' ? 'hero' : 'web';
                     const { blob } = await optimizeImage(insumoFile, target, insumoTransform);
                     setInsumoOptimizedBlob(blob);
 
@@ -511,6 +511,23 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                 setActiveImage(publicUrls[0]); // Mantener la primera como activa para previsualizaciones
             }
 
+            // @adn: Si el destino es Hero, también subir copia a grilla para activar
+            // el widget "IMAGEN PREPARADA / ENVIAR A SECCIÓN" en la pestaña GRILLA
+            if (insumoDestination === 'hero' && insumoOptimizedBlobs.length > 0) {
+                const heroBlob = insumoOptimizedBlobs[0];
+                const grillaFileName = `INSUMO-HERO-${timestamp}-0.webp`;
+                const grillaPath = `grilla/${grillaFileName}`;
+                try {
+                    await supabase.storage
+                        .from('imagenes-marketing')
+                        .upload(grillaPath, heroBlob, { contentType: 'image/webp' });
+                    // No sobrescribimos activeImage — la URL del Hero sigue siendo la principal
+                } catch (grillaErr) {
+                    // No bloquear el flujo si falla la copia a grilla
+                    console.warn('@adn: No se pudo duplicar imagen en grilla:', grillaErr);
+                }
+            }
+
             if (insumoDestination === 'catalog') {
                 if (insumoCatalogAction === 'update' && selectedProduct) {
                     // Actualizar producto seleccionado
@@ -543,6 +560,34 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                     setActiveTab('catalog');
                 }
             } else if (insumoDestination === 'gallery') {
+                // Auto-asignar a la colección seleccionada directamente
+                try {
+                    const { data: current } = await supabase
+                        .from('web_contenido')
+                        .select('content')
+                        .eq('section', 'gallery')
+                        .single();
+
+                    const content = current?.content || { sections: [] };
+                    const updatedSections = (content.sections || []).map((sec: any) => {
+                        if (sec.id === selectedGallerySection || sec.title1 === selectedGallerySection) {
+                            const currentGallery = Array.isArray(sec.gallery) ? sec.gallery : [];
+                            return { ...sec, gallery: [...currentGallery, ...publicUrls] };
+                        }
+                        return sec;
+                    });
+
+                    await supabase
+                        .from('web_contenido')
+                        .upsert({
+                            section: 'gallery',
+                            content: { ...content, sections: updatedSections },
+                            updated_by: 'CatalogHub-Insumo'
+                        }, { onConflict: 'section' });
+
+                } catch (err) {
+                    console.error('Error auto-asignando a grilla:', err);
+                }
                 setActiveTab('gallery');
                 fetchGallery(selectedGallerySection);
             } else if (insumoDestination === 'hero') {
@@ -560,7 +605,9 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
             setInsumoOptimizedBlob(null);
             setInsumoOptimizedBlobs([]);
             setInsumoSavingPercentage(0);
-            if (insumoDestination === 'catalog') {
+
+            // Si el destino era gallery o catalog, limpiamos activeImage
+            if (insumoDestination === 'catalog' || insumoDestination === 'gallery') {
                 setActiveImage(null);
             }
 
@@ -925,7 +972,7 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
 
     const optimizeImage = async (
         file: File,
-        target: 'web' | 'email' = 'web',
+        target: 'web' | 'email' | 'hero' = 'web',
         transform = { zoom: 1, rotation: 0, flipX: false, aspectRatio: 'original' as any, offsetX: 0, offsetY: 0 }
     ): Promise<{ blob: Blob, width: number, height: number }> => {
         return new Promise((resolve, reject) => {
@@ -940,8 +987,11 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                     if (!ctx) return reject('No se pudo obtener el contexto del canvas');
 
                     // 1. Determinar dimensiones base según Target
-                    const MAX_WIDTH = target === 'web' ? 1600 : 800;
-                    const QUALITY = target === 'web' ? 0.82 : 0.75;
+                    // 'hero'  → 2560px máx / calidad 0.93 (pantallas 2K/4K, full-width hero banner)
+                    // 'web'   → 1600px máx / calidad 0.82 (catálogo, grilla)
+                    // 'email' → 800px máx  / calidad 0.75 (JPG para email)
+                    const MAX_WIDTH = target === 'hero' ? 2560 : target === 'web' ? 1600 : 800;
+                    const QUALITY = target === 'hero' ? 0.93 : target === 'web' ? 0.82 : 0.75;
                     const MIME_TYPE = target === 'email' ? 'image/jpeg' : 'image/webp';
 
                     let baseWidth = img.width;
@@ -2653,55 +2703,6 @@ export default function CatalogHub({ isOpen, onClose }: CatalogHubProps) {
                                                     })}
                                                 </div>
 
-                                                {/* VISOR DE BIBLIOTECA DE MARKETING (RECURSOS JPG) */}
-                                                <div style={{ marginTop: '60px', padding: '40px', background: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.03)', borderRadius: '12px' }}>
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
-                                                        <div>
-                                                            <h3 style={{ color: 'var(--accent-turquoise)', fontSize: '14px', fontWeight: '900', letterSpacing: '4px', margin: 0, textTransform: 'uppercase' }}>BIBLIOTECA DE MARKETING</h3>
-                                                            <p style={{ color: '#444', fontSize: '11px', fontWeight: '700', margin: '5px 0 0' }}>RECURSOS LIVIANOS (JPG) TRATADOS PARA CORREO Y WEB</p>
-                                                        </div>
-                                                        <button
-                                                            onClick={fetchMarketingStorage}
-                                                            style={{ padding: '10px 20px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: '#999', borderRadius: '4px', fontSize: '10px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
-                                                        >
-                                                            <RefreshCw size={14} className={marketingLibraryLoading ? 'animate-spin' : ''} />
-                                                            REFRESCAR
-                                                        </button>
-                                                    </div>
-
-                                                    {marketingLibraryLoading && marketingLibraryImages.length === 0 ? (
-                                                        <div style={{ height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                            <Loader2 className="animate-spin" size={30} color="var(--accent-turquoise)" />
-                                                        </div>
-                                                    ) : (
-                                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '20px' }}>
-                                                            {marketingLibraryImages.map((url, i) => (
-                                                                <div
-                                                                    key={i}
-                                                                    onClick={() => setActiveImage(url)}
-                                                                    style={{
-                                                                        aspectRatio: '1/1',
-                                                                        background: '#000',
-                                                                        borderRadius: '4px',
-                                                                        border: `2px solid ${activeImage === url ? 'var(--accent-turquoise)' : 'rgba(255,255,255,0.05)'}`,
-                                                                        cursor: 'pointer',
-                                                                        overflow: 'hidden',
-                                                                        transition: 'all 0.3s',
-                                                                        position: 'relative',
-                                                                        transform: activeImage === url ? 'scale(0.95)' : 'scale(1)'
-                                                                    }}
-                                                                >
-                                                                    <img src={url} style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: activeImage === url ? 1 : 0.7 }} alt={`Mkt ${i}`} />
-                                                                    {activeImage === url && (
-                                                                        <div style={{ position: 'absolute', top: '10px', right: '10px', background: 'var(--accent-turquoise)', borderRadius: '50%', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                                            <Check size={12} color="black" />
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                </div>
                                             </div>
                                         </div>
                                     </React.Fragment>

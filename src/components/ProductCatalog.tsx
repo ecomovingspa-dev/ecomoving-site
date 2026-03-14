@@ -29,7 +29,7 @@ export default function ProductCatalog({
     const [isEditing, setIsEditing] = useState(false);
     const [filter, setFilter] = useState('Todos');
     const [isExpandingCategories, setIsExpandingCategories] = useState(false);
-    const specialCategories = ['ECOLOGICOS', 'BOTELLAS, MUG Y TAZAS', 'CUADERNOS, LIBRETAS Y MEMO SET', 'MOCHILAS, BOLSOS Y MORRALES', 'BOLÍGRAFOS', 'ACCESORIOS'];
+    const [specialCategories, setSpecialCategories] = useState(['ECOLOGICOS', 'BOTELLAS, MUG Y TAZAS', 'CUADERNOS, LIBRETAS Y MEMO SET', 'MOCHILAS, BOLSOS Y MORRALES', 'BOLÍGRAFOS', 'ACCESORIOS']);
 
     useEffect(() => {
         // Cargar productos aprobados desde Supabase
@@ -62,6 +62,15 @@ export default function ProductCatalog({
 
                 console.log('✅ Catálogo Vivo cargado desde Supabase:', formattedProducts.length);
                 setProducts(formattedProducts);
+
+                // Actualizar categorías dinámicamente desde los productos
+                const existingCats = new Set(['ECOLOGICOS', 'BOTELLAS, MUG Y TAZAS', 'CUADERNOS, LIBRETAS Y MEMO SET', 'MOCHILAS, BOLSOS Y MORRALES', 'BOLÍGRAFOS', 'ACCESORIOS']);
+                formattedProducts.forEach(p => {
+                    if (p.category && p.category !== 'Otros') {
+                        existingCats.add(p.category.toUpperCase());
+                    }
+                });
+                setSpecialCategories(Array.from(existingCats).sort());
             } else {
                 // Si la tabla productos está vacía, fallback a catalog.json estático
                 const catalogData = await import('../data/catalog.json');
@@ -150,6 +159,19 @@ export default function ProductCatalog({
             alert(`Error al sincronizar con la base de datos: ${error.message || 'Error desconocido'}`);
         } finally {
             setTimeout(() => setIsEditing(false), 500);
+        }
+    };
+
+    const handleAddCategory = () => {
+        const newCat = prompt('Ingrese el nombre de la nueva categoría:');
+        if (newCat && newCat.trim()) {
+            const upperCat = newCat.trim().toUpperCase();
+            if (!specialCategories.includes(upperCat)) {
+                setSpecialCategories(prev => [...prev, upperCat].sort());
+            }
+            if (selectedProduct) {
+                handleLocalUpdate({ ...selectedProduct, category: upperCat });
+            }
         }
     };
 
@@ -408,25 +430,27 @@ export default function ProductCatalog({
                             exit={{ scale: 0.9, opacity: 0, y: 20 }}
                             onClick={(e) => e.stopPropagation()}
                             style={{
-                                background: '#0A0A0A',
-                                width: '1200px',
-                                maxWidth: '95vw',
-                                maxHeight: '92vh',
-                                height: '92vh',
-                                borderRadius: '4px',
-                                overflow: 'hidden',
+                                width: '1550px',
+                                maxWidth: '98vw',
+                                maxHeight: '98vh',
+                                height: '98vh',
+                                borderRadius: '8px',
+                                overflowY: 'auto', // Cambiado para permitir scroll de landing
                                 display: 'flex',
                                 flexDirection: 'column',
                                 position: 'relative',
-                                border: '1px solid rgba(255,255,255,0.06)',
-                                boxShadow: '0 40px 120px rgba(0,0,0,0.9)',
+                                background: '#080808',
+                                border: '1px solid rgba(255,255,255,0.08)',
+                                boxShadow: '0 50px 150px rgba(0,0,0,1)',
+                                scrollbarWidth: 'none',
                             }}
                         >
-                            {/* FILA SUPERIOR: Imagen izq | Info der */}
-                            <div style={{ display: 'flex', flexDirection: 'row', flex: 1, overflow: 'hidden', minHeight: 0 }}>
 
-                                {/* COLUMNA IZQUIERDA: Imagen principal + miniaturas */}
-                                <div style={{ width: '480px', flexShrink: 0, display: 'flex', flexDirection: 'column', background: '#000', overflow: 'hidden' }}>
+                            {/* SECCIÓN 1: HERO DEL PRODUCTO (Imagen + Specs) */}
+                            <div style={{ display: 'flex', flexDirection: 'row', minHeight: '95vh', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+
+                                {/* COLUMNA IZQUIERDA: Galería de Alto Impacto */}
+                                <div style={{ width: '650px', flexShrink: 0, display: 'flex', flexDirection: 'column', background: '#000', borderRight: '1px solid rgba(255,255,255,0.03)' }}>
 
                                     {/* Visor imagen principal */}
                                     <div
@@ -459,8 +483,8 @@ export default function ProductCatalog({
                                     </div>
 
                                     {/* Fila doble de miniaturas */}
-                                    <div style={{ height: '174px', flexShrink: 0, background: '#0a0a0a', borderTop: '1px solid rgba(255,255,255,0.05)', padding: '8px', overflowX: 'auto', overflowY: 'hidden' }}>
-                                        <div style={{ display: 'grid', gridTemplateRows: 'repeat(2, 75px)', gridAutoFlow: 'column', gridAutoColumns: '75px', gap: '8px', height: '100%' }}>
+                                    <div style={{ height: '200px', flexShrink: 0, background: '#0a0a0a', borderTop: '1px solid rgba(255,255,255,0.05)', padding: '20px', overflowX: 'auto', overflowY: 'hidden' }}>
+                                        <div style={{ display: 'grid', gridTemplateRows: 'repeat(2, 80px)', gridAutoFlow: 'column', gridAutoColumns: '80px', gap: '15px', height: '100%' }}>
                                             {(galleryImages.length > 0 ? galleryImages : [selectedProduct.image]).map((img, idx) => (
                                                 <motion.div
                                                     key={idx}
@@ -468,9 +492,9 @@ export default function ProductCatalog({
                                                     whileTap={{ scale: 0.95 }}
                                                     onClick={(e) => { e.stopPropagation(); setActiveImage(img || ''); }}
                                                     style={{
-                                                        width: '75px', height: '75px', overflow: 'hidden', cursor: 'pointer',
-                                                        borderRadius: '2px', opacity: (activeImage || selectedProduct.image) === img ? 1 : 0.6,
-                                                        border: (activeImage || selectedProduct.image) === img ? '1px solid #00E5A0' : '1px solid rgba(255,255,255,0.05)',
+                                                        width: '80px', height: '80px', overflow: 'hidden', cursor: 'pointer',
+                                                        borderRadius: '4px', opacity: (activeImage || selectedProduct.image) === img ? 1 : 0.6,
+                                                        border: (activeImage || selectedProduct.image) === img ? '2px solid #00E5A0' : '1px solid rgba(255,255,255,0.05)',
                                                         background: '#151515', transition: 'all 0.3s ease', flexShrink: 0
                                                     }}
                                                 >
@@ -481,8 +505,8 @@ export default function ProductCatalog({
                                     </div>
                                 </div>
 
-                                {/* COLUMNA DERECHA: Info del producto — crece al ancho disponible */}
-                                <div style={{ flex: 1, background: '#080808', padding: '40px', overflowY: 'auto', display: 'flex', flexDirection: 'column', borderLeft: '1px solid rgba(255,255,255,0.03)', scrollbarWidth: 'none' }}>
+                                {/* COLUMNA DERECHA: Narrativa del Producto */}
+                                <div style={{ flex: 1, background: '#080808', padding: '120px 80px', display: 'flex', flexDirection: 'column', scrollbarWidth: 'none' }}>
                                     {isEditing ? (
                                         <div className="edit-form">
                                             <div className="edit-grid-system">
@@ -503,6 +527,26 @@ export default function ProductCatalog({
                                                         ))}
                                                         <option value="Otros">Otros</option>
                                                     </select>
+                                                    <button 
+                                                        onClick={handleAddCategory}
+                                                        style={{
+                                                            background: 'rgba(0, 229, 160, 0.1)',
+                                                            border: '1px solid rgba(0, 229, 160, 0.3)',
+                                                            color: '#00E5A0',
+                                                            padding: '10px',
+                                                            borderRadius: '4px',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            transition: 'all 0.3s'
+                                                        }}
+                                                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(0, 229, 160, 0.2)'}
+                                                        onMouseLeave={e => e.currentTarget.style.background = 'rgba(0, 229, 160, 0.1)'}
+                                                        title="Nueva Categoría"
+                                                    >
+                                                        <Plus size={18} />
+                                                    </button>
                                                 </div>
                                                 <div className="edit-field-group">
                                                     <label>NOMBRE PRODUCTO</label>
@@ -565,40 +609,73 @@ export default function ProductCatalog({
                                                 </ul>
                                             </div>
 
-                                            <button style={{ background: '#00E5A0', color: 'black', border: 'none', padding: '20px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '2px', cursor: 'pointer', transition: 'all 0.4s', fontSize: '0.75rem', borderRadius: '2px', marginTop: 'auto', width: '100%' }}>Solicitar Cotización Personalizada</button>
+                                            <button style={{
+                                                background: '#00E5A0',
+                                                color: 'black',
+                                                border: 'none',
+                                                padding: '24px',
+                                                fontWeight: 900,
+                                                textTransform: 'uppercase',
+                                                letterSpacing: '3px',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.4s',
+                                                fontSize: '0.85rem',
+                                                borderRadius: '4px',
+                                                marginTop: '40px',
+                                                width: '100%',
+                                                boxShadow: '0 10px 30px rgba(0, 229, 160, 0.2)'
+                                            }}
+                                                onMouseEnter={e => e.currentTarget.style.background = '#FFFFFF'}
+                                                onMouseLeave={e => e.currentTarget.style.background = '#00E5A0'}
+                                            >
+                                                Solicitar Cotización Personalizada
+                                            </button>
                                         </>
                                     )}
                                 </div>
 
                             </div>{/* fin fila superior */}
 
-                            {/* FILA INFERIOR: Productos Relacionados — ancho completo */}
-                            {!isEditing && products.filter(p => p.category === selectedProduct.category && p.id !== selectedProduct.id).length > 0 && (
-                                <div style={{ flexShrink: 0, borderTop: '1px solid rgba(255,255,255,0.06)', background: '#060606', padding: '20px 32px' }}>
-                                    <h4 style={{ margin: '0 0 16px 0', fontSize: '0.6rem', fontWeight: 800, letterSpacing: '3px', textTransform: 'uppercase', color: '#444' }}>Productos Relacionados</h4>
-                                    <div style={{ display: 'flex', flexDirection: 'row', gap: '12px', overflowX: 'auto', scrollbarWidth: 'none' }}>
+                            {/* GRAN ESPACIADOR DE RESPIRACIÓN 2026 */}
+                            {!isEditing && <div style={{ height: '200px' }} />}
+
+                            {/* SECCIÓN 2: PRODUCTOS RELACIONADOS — Flujo Landing */}
+                            {!isEditing && products.filter(p => (p.category || '').toLowerCase() === (selectedProduct.category || '').toLowerCase() && p.id !== selectedProduct.id).length > 0 && (
+                                <div style={{ flexShrink: 0, background: '#050505', padding: '120px 100px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                                    <h4 style={{ margin: '0 0 60px 0', fontSize: '0.75rem', fontWeight: 900, letterSpacing: '6px', textTransform: 'uppercase', color: '#666', textAlign: 'center' }}>Complementa tu Selección</h4>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '40px' }}>
                                         {products
-                                            .filter(p => p.category === selectedProduct.category && p.id !== selectedProduct.id)
-                                            .slice(0, 8)
+                                            .filter(p => (p.category || '').toLowerCase() === (selectedProduct.category || '').toLowerCase() && p.id !== selectedProduct.id)
+                                            .slice(0, 10)
                                             .map(related => (
                                                 <div
                                                     key={related.id}
                                                     onClick={() => { setSelectedProduct(related); setActiveImage(related.image); }}
-                                                    style={{ flexShrink: 0, width: '110px', cursor: 'pointer', background: '#111', borderRadius: '2px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.04)', transition: 'border-color 0.3s' }}
-                                                    onMouseEnter={e => (e.currentTarget.style.borderColor = '#00E5A0')}
-                                                    onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.04)')}
+                                                    style={{ cursor: 'pointer', background: '#0A0A0A', borderRadius: '4px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.05)', transition: 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }}
+                                                    onMouseEnter={e => {
+                                                        e.currentTarget.style.borderColor = '#00E5A0';
+                                                        e.currentTarget.style.transform = 'translateY(-10px)';
+                                                        e.currentTarget.style.boxShadow = '0 20px 40px rgba(0,0,0,0.5)';
+                                                    }}
+                                                    onMouseLeave={e => {
+                                                        e.currentTarget.style.borderColor = 'rgba(255,255,255,0.05)';
+                                                        e.currentTarget.style.transform = 'translateY(0)';
+                                                        e.currentTarget.style.boxShadow = 'none';
+                                                    }}
                                                 >
-                                                    <div style={{ width: '110px', height: '90px', overflow: 'hidden', background: '#0a0a0a' }}>
-                                                        <img src={related.image} alt={related.name} style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.85 }} />
+                                                    <div style={{ aspectRatio: '1/1', overflow: 'hidden', background: '#000' }}>
+                                                        <img src={related.image} alt={related.name} style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.8, transition: 'opacity 0.3s' }} />
                                                     </div>
-                                                    <div style={{ padding: '6px 8px' }}>
-                                                        <span style={{ fontSize: '0.6rem', color: '#666', letterSpacing: '0.5px', textTransform: 'uppercase', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{related.name}</span>
+                                                    <div style={{ padding: '15px' }}>
+                                                        <span style={{ fontSize: '0.7rem', color: '#FFF', fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>{related.name}</span>
+                                                        <span style={{ fontSize: '0.55rem', color: '#00E5A0', letterSpacing: '1px' }}>VER DETALLES</span>
                                                     </div>
                                                 </div>
                                             ))}
                                     </div>
                                 </div>
                             )}
+
                             <div style={{ position: 'absolute', right: '40px', top: '40px', display: 'flex', gap: '20px', zIndex: 100 }}>
                                 {adminMode && (
                                     <button className="action-btn" onClick={() => {
@@ -614,14 +691,53 @@ export default function ProductCatalog({
                                     <X />
                                 </button>
                             </div>
-                        </motion.div >
-
-                    </motion.div >
-                )
-                }
-            </AnimatePresence >
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             <style jsx>{`
+                .modal-content-landing::-webkit-scrollbar { display: none; }
+                
+                /* Aeroespacial 2026 Palette */
+                .category-tag { 
+                    color: #666; 
+                    font-size: 0.75rem; 
+                    font-weight: 800; 
+                    letter-spacing: 4px; 
+                    text-transform: uppercase; 
+                    margin-bottom: 20px;
+                    display: block;
+                }
+                .modal-content h2 { 
+                    color: #FFFFFF; 
+                    font-size: 3.5rem; 
+                    font-weight: 900; 
+                    letter-spacing: -1px; 
+                    margin-bottom: 40px; 
+                    line-height: 1.1; 
+                }
+                .specs-header { 
+                    color: #666; 
+                    font-size: 0.7rem; 
+                    font-weight: 900; 
+                    letter-spacing: 3px; 
+                    text-transform: uppercase; 
+                    border-bottom: 1px solid rgba(255,255,255,0.05);
+                    padding-bottom: 15px;
+                    margin-bottom: 25px;
+                }
+                .specs-list li { 
+                    color: #A0A0A0; 
+                    font-size: 0.95rem; 
+                    line-height: 1.8; 
+                    margin-bottom: 10px;
+                    display: flex;
+                    align-items: flex-start;
+                    gap: 12px;
+                }
+                .specs-list li .accent { color: #00E5A0; margin-top: 5px; }
+
                 .catalog-wrapper {
                     padding: 80px 20px;
                     background-color: #0A0A0A;
@@ -1089,6 +1205,6 @@ export default function ProductCatalog({
                     color: white;
                 }
             `}</style>
-        </div >
+        </div>
     );
 }

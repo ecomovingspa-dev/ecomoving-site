@@ -17,6 +17,8 @@ export interface HeroContent {
     drive_folder_id?: string;
     text_align_h?: string;
     text_align_v?: string;
+    titleLineHeight?: string;
+    paragraphLineHeight?: string;
 }
 
 export interface LayoutBlock {
@@ -43,10 +45,11 @@ export interface LayoutBlock {
     shadow?: 'none' | 'soft' | 'strong' | 'neon';
     gradient?: boolean;
     isCircle?: boolean;
+    borderColor?: string;
     writingMode?: 'horizontal-tb' | 'vertical-rl' | 'vertical-lr';
     fontSize?: string; // ej: "2rem"
     gallery?: string[]; // Para diapositivas dentro del bloque
-    galleryAnimation?: 'fade' | 'slide-h' | 'slide-v' | 'zoom' | 'none';
+    galleryAnimation?: 'fade' | 'slide-h' | 'slide-v' | 'zoom' | 'none' | 'peek' | 'crossfade' | 'full-carousel';
 
     // Transformación Experta
     transform_zoom?: number;
@@ -59,9 +62,18 @@ export interface LayoutBlock {
     fontWeight?: string;    // 400, 600, 700, 900
     textTransform?: 'none' | 'uppercase' | 'lowercase' | 'capitalize';
     letterSpacing?: string; // normal, 1px, 2px, 4px, -1px
-    lineHeight?: string;    // 1.2, 1.5, 1.8, 2.0
+    lineHeight?: string;    // 1.2, 1.5, 1.8, 2.0 (Párrafo)
+    titleLineHeight?: string; // 0.9, 1.0, 1.1, 1.2
     fontStyle?: 'normal' | 'italic';
     fontFamily?: 'sans' | 'serif' | 'mono';
+    textPadding?: string;   // ej: "30px" o "20px 40px"
+    textMaxWidth?: string;  // ej: "90%" o "500px"
+    textVerticalAlign?: 'flex-start' | 'center' | 'flex-end';
+    paragraphSize?: string; // ej: "1rem" o "16px"
+    textGap?: string; // ej: "10px"
+    link?: string; // Enlace asociado al bloque (generado por la IA al buscar un SKU)
+    buttonText?: string;
+    buttonSku?: string;
 }
 
 export interface DynamicSection {
@@ -81,6 +93,8 @@ export interface DynamicSection {
     descAlign?: 'left' | 'center' | 'right' | 'justify';
     descCol?: number;   // 1-24
     descSpan?: number;  // 1-24
+    titleLineHeight?: string;
+    paragraphLineHeight?: string;
     gallery?: string[];
     seo_keywords?: string;
 }
