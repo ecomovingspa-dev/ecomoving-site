@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
@@ -43,8 +43,14 @@ const BentoBlock = ({ block, designMode, assets, handleDrop, entryIndex, onClick
   const baseImages = block.gallery && block.gallery.length > 0 ? block.gallery : [block.image].filter(Boolean);
   // En modo 'peek', la galería tiene prioridad: el localStorage override es una sola imagen
   // y rompería el carrusel. Solo se aplica el override en modos de slideshow normales.
-  const isPeek = ['peek', 'full-carousel'].includes(block.galleryAnimation) && baseImages.length >= 2;
-  const images = (!isPeek && assets[block.id]) ? [assets[block.id]] : baseImages;
+  const isPeek = ['peek', 'full-carousel'].includes(block.galleryAnimation || '') && baseImages.length >= 2;
+  // Bugfix: ensure we actually have valid image URLs. If a block has NO images defined, fallback to a placeholder if design mode, else empty array.
+  const validImages = baseImages.map((img: string) => img?.trim()).filter(Boolean);
+  let images = (!isPeek && assets[block.id]) ? [assets[block.id]] : validImages;
+  
+  if (images.length === 0) {
+      images = designMode ? ['https://via.placeholder.com/800x600?text=Arrastra+una+imagen+aqui'] : [];
+  }
   const [spanW, spanH] = (block.span || '4x1').split('x').map((n: string) => parseInt(n) || 1);
   const isText = block.type === 'text' || block.type === 'both';
   const isImage = block.type === 'image' || block.type === 'both' || !block.type;
@@ -101,6 +107,7 @@ const BentoBlock = ({ block, designMode, assets, handleDrop, entryIndex, onClick
     <motion.div
       ref={cardRef}
       layoutId={block.id}
+      className="bento-block-mobile"
       // ── CONCEPTO PREMIUM: entrada escalonada desde abajo al hacer scroll ──
       initial={{ opacity: 0, y: 40 }}
       whileInView={{ opacity: 1, y: 0 }}
@@ -629,7 +636,7 @@ export default function Home() {
         )}
 
         {/* --- AQUÍ EMPIEZA EL LIENZO INFINITO --- */}
-        <div style={{
+        <div className="responsive-grid" style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(48, 1fr)',
           gridAutoRows: '15px', // Micro-resolución de 15px para control total
@@ -738,6 +745,42 @@ export default function Home() {
         .nav-btn:hover { color: var(--eco-accent-primary); border-color: var(--eco-accent-primary); }
         .cta-luxury:hover { transform: scale(1.05); box-shadow: var(--eco-accent-glow); }
         .loading-screen { height: 100vh; background: var(--eco-bg-primary); color: var(--eco-accent-primary); display: flex; align-items: center; justify-content: center; font-size: 2rem; letter-spacing: 15px; font-family: var(--eco-font-display); }
+
+        /* --- RESPONSIVE MOBILE FIXES --- */
+        @media (max-width: 768px) {
+          .nav-master {
+            flex-direction: column;
+            padding: 15px 20px;
+            gap: 15px;
+          }
+          .nav-actions {
+            flex-wrap: wrap;
+            justify-content: center;
+          }
+          .hero-premium {
+            padding: 120px 20px !important;
+          }
+          .hero-premium h1 {
+            font-size: 3rem !important;
+          }
+          .hero-premium p {
+            font-size: 1.1rem !important;
+          }
+          /* Override strict grid placing for mobile to make it flow naturally */
+          .responsive-grid {
+            display: flex !important;
+            flex-direction: column !important;
+            gap: 20px !important;
+          }
+          .bento-block-mobile {
+            grid-column: unset !important;
+            grid-row: unset !important;
+            width: 100% !important;
+            height: auto !important;
+            min-height: 250px !important;
+            aspect-ratio: auto !important;
+          }
+        }
       `}</style>
     </main>
   );
