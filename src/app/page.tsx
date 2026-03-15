@@ -687,7 +687,12 @@ export default function Home() {
           overflow: 'visible'
         }}>
 
-          {hasBlocks && masterSection.blocks.map((block: any, idx: number) => (
+          {hasBlocks && [...masterSection.blocks].sort((a: any, b: any) => {
+            // Sort primarily by row (top to bottom)
+            if (a.row !== b.row) return (a.row || 0) - (b.row || 0);
+            // Sort secondarily by col (left to right)
+            return (a.col || 0) - (b.col || 0);
+          }).map((block: any, idx: number) => (
             <BentoBlock
               key={block.id}
               block={block}
