@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
-import { Crop, FileText, Image as ImageIcon, Layout, Lock, Unlock, Layers, Rocket, Send, CloudUpload } from 'lucide-react';
+import { Crop, FileText, Image as ImageIcon, Layout, Lock, Unlock, Layers, Rocket, Send, CloudUpload, Monitor, Tablet, Smartphone } from 'lucide-react';
 import { motion, AnimatePresence, useScroll, useSpring } from 'framer-motion';
 import { useWebContent, SectionContent, GridCell, DynamicSection, WebContent } from '@/hooks/useWebContent';
 import EditorSEO from '@/components/EditorSEO';
@@ -293,6 +293,8 @@ export default function Home() {
     restDelta: 0.001
   });
 
+  const [previewMode, setPreviewMode] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
+
   const { content, loading: contentLoading, refetch: refetchContent, updateSection } = useWebContent();
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
 
@@ -523,15 +525,51 @@ export default function Home() {
           <button onClick={() => setIsCatalogHubOpen(true)} className='nav-btn'><Layout size={16} /> HUB</button>
           <button onClick={() => setIsBibliotecaOpen(true)} className='nav-btn'><ImageIcon size={16} /> BIBLIOTECA</button>
           <button onClick={() => setIsEditorSEOOpen(true)} className='nav-btn'><FileText size={16} /> SEO</button>
+          
+          {/* SIMULADOR DISPOSITIVOS */}
+          <div style={{ display: 'flex', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.1)', overflow: 'hidden', marginLeft: '10px' }}>
+            <button onClick={() => setPreviewMode('desktop')} className='nav-btn' style={{ border: 'none', borderRadius: 0, backgroundColor: previewMode === 'desktop' ? 'rgba(0,212,189,0.2)' : 'transparent', color: previewMode === 'desktop' ? '#00d4bd' : '#aaa' }} title="Desktop View">
+              <Monitor size={16} />
+            </button>
+            <button onClick={() => setPreviewMode('tablet')} className='nav-btn' style={{ border: 'none', borderLeft: '1px solid rgba(255,255,255,0.1)', borderRadius: 0, backgroundColor: previewMode === 'tablet' ? 'rgba(0,212,189,0.2)' : 'transparent', color: previewMode === 'tablet' ? '#00d4bd' : '#aaa' }} title="Tablet View">
+              <Tablet size={16} />
+            </button>
+            <button onClick={() => setPreviewMode('mobile')} className='nav-btn' style={{ border: 'none', borderLeft: '1px solid rgba(255,255,255,0.1)', borderRadius: 0, backgroundColor: previewMode === 'mobile' ? 'rgba(0,212,189,0.2)' : 'transparent', color: previewMode === 'mobile' ? '#00d4bd' : '#aaa' }} title="Mobile View">
+              <Smartphone size={16} />
+            </button>
+          </div>
+
           {selectedProject.type === 'public' && (
-            <button onClick={() => setIsExportModalOpen(true)} className='nav-btn' style={{ background: 'var(--accent-gold)11', color: 'var(--accent-gold)', borderColor: 'var(--accent-gold)33' }}><Send size={16} /> EXPORTAR</button>
+            <button onClick={() => setIsExportModalOpen(true)} className='nav-btn' style={{ background: 'var(--accent-gold)11', color: 'var(--accent-gold)', borderColor: 'var(--accent-gold)33', marginLeft: '10px' }}><Send size={16} /> EXPORTAR</button>
           )}
           <button onClick={() => { setDesignMode(!designMode); setSelectedBlockId(null); }} className='nav-btn'
-            style={designMode ? { background: 'rgba(0,212,189,0.15)', color: '#00d4bd', borderColor: 'rgba(0,212,189,0.5)' } : {}}>
+            style={designMode ? { background: 'rgba(0,212,189,0.15)', color: '#00d4bd', borderColor: 'rgba(0,212,189,0.5)', marginLeft: '10px' } : { marginLeft: '10px' }}>
             <Crop size={16} /> {designMode ? '● DISEÑO' : 'DISEÑO'}
           </button>
         </div>
       </nav>
+
+      <div style={{ padding: '80px 0 0 0', minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', backgroundColor: previewMode !== 'desktop' ? '#111' : 'transparent' }}>
+        <div 
+          className={`device-preview-wrapper ${previewMode}`}
+          style={{
+            width: previewMode === 'desktop' ? '100%' : previewMode === 'tablet' ? '768px' : '375px',
+            backgroundColor: 'var(--eco-bg-primary)',
+            transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+            minHeight: '100vh',
+            transformOrigin: 'top center',
+            overflowX: 'hidden',
+            boxShadow: previewMode !== 'desktop' ? '0 30px 60px rgba(0,0,0,0.8)' : 'none',
+            border: previewMode === 'mobile' ? '8px solid #333' : previewMode === 'tablet' ? '4px solid #222' : 'none',
+            borderRadius: previewMode === 'mobile' ? '40px' : previewMode === 'tablet' ? '20px' : '0',
+            marginTop: previewMode !== 'desktop' ? '30px' : '0',
+            marginBottom: previewMode !== 'desktop' ? '50px' : '0',
+            position: 'relative'
+          }}
+        >
+          {previewMode === 'mobile' && (
+            <div style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', width: '120px', height: '20px', backgroundColor: '#333', borderBottomLeftRadius: '10px', borderBottomRightRadius: '10px', zIndex: 9999 }}></div>
+          )}
 
       {/* --- HERO SECTION --- */}
       <section
@@ -673,6 +711,9 @@ export default function Home() {
         <div style={{ fontSize: '0.8rem', color: '#555', letterSpacing: '4px', marginBottom: '30px' }}>CHILE &bull; SUSTENTABILIDAD &bull; DISEÑO</div>
         <div style={{ fontSize: '0.7rem', color: '#333' }}>© 2026 TODOS LOS DERECHOS RESERVADOS</div>
       </footer>
+      
+      </div> {/* CLOSING WRAPPER DIV */}
+      </div> {/* CLOSING OUTER PADDING DIV */}
 
       {/* --- TOOLS --- */}
       <SectionComposer
@@ -752,35 +793,32 @@ export default function Home() {
             flex-direction: column;
             padding: 15px 20px;
             gap: 15px;
+            position: relative; 
           }
           .nav-actions {
             flex-wrap: wrap;
             justify-content: center;
           }
-          .hero-premium {
-            padding: 120px 20px !important;
-          }
-          .hero-premium h1 {
-            font-size: 3rem !important;
-          }
-          .hero-premium p {
-            font-size: 1.1rem !important;
-          }
-          /* Override strict grid placing for mobile to make it flow naturally */
-          .responsive-grid {
-            display: flex !important;
-            flex-direction: column !important;
-            gap: 20px !important;
-          }
-          .bento-block-mobile {
-            grid-column: unset !important;
-            grid-row: unset !important;
-            width: 100% !important;
-            height: auto !important;
-            min-height: 250px !important;
-            aspect-ratio: auto !important;
-          }
         }
+        
+        /* Mobile Breakpoint OR Simulated Mobile View */
+        @media (max-width: 768px) {
+           .hero-premium { padding: 120px 20px !important; }
+           .hero-premium h1 { font-size: 3rem !important; }
+           .hero-premium p { font-size: 1.1rem !important; }
+           .responsive-grid { display: flex !important; flex-direction: column !important; gap: 20px !important; }
+           .bento-block-mobile { grid-column: unset !important; grid-row: unset !important; width: 100% !important; height: auto !important; min-height: 250px !important; aspect-ratio: auto !important; }
+        }
+
+        .device-preview-wrapper.mobile .hero-premium { padding: 120px 20px !important; }
+        .device-preview-wrapper.mobile .hero-premium h1 { font-size: 3rem !important; }
+        .device-preview-wrapper.mobile .hero-premium p { font-size: 1.1rem !important; }
+        .device-preview-wrapper.mobile .responsive-grid { display: flex !important; flex-direction: column !important; gap: 20px !important; }
+        .device-preview-wrapper.mobile .bento-block-mobile { grid-column: unset !important; grid-row: unset !important; width: 100% !important; height: auto !important; min-height: 250px !important; aspect-ratio: auto !important; }
+
+        /* Simulated Tablet View */
+        .device-preview-wrapper.tablet .hero-premium { padding: 120px 40px !important; }
+        .device-preview-wrapper.tablet .hero-premium h1 { font-size: 4rem !important; }
       `}</style>
     </main>
   );
