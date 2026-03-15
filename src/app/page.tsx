@@ -125,7 +125,8 @@ const BentoBlock = ({ block, designMode, assets, handleDrop, entryIndex, onClick
           ? `linear-gradient(135deg, ${block.bgColor}, ${block.bgColor}dd)`
           : (block.bgColor || '#111'),
         borderRadius: block.isCircle ? '50%' : (block.borderRadius || '12px'),
-        aspectRatio: aspectRatio,
+        // Dynamic aspect ratio fallback for mobile flex stacking
+        aspectRatio: aspectRatio !== 'auto' ? aspectRatio : `${spanW} / ${spanH}`,
         boxShadow: isHovered
           ? (shadowStyles[block.shadow as keyof typeof shadowStyles] || '0 20px 60px rgba(0,0,0,0.5)')
           : (shadowStyles[block.shadow as keyof typeof shadowStyles] || shadowStyles.none),
@@ -812,14 +813,27 @@ export default function Home() {
            .hero-premium h1 { font-size: 3rem !important; }
            .hero-premium p { font-size: 1.1rem !important; }
            .responsive-grid { display: flex !important; flex-direction: column !important; gap: 20px !important; }
-           .bento-block-mobile { grid-column: unset !important; grid-row: unset !important; width: 100% !important; height: auto !important; min-height: 250px !important; aspect-ratio: auto !important; }
+           .bento-block-mobile { 
+             grid-column: unset !important; 
+             grid-row: unset !important; 
+             width: 100% !important; 
+             /* We remove height and aspect-ratio overrides so the inline style takes precedence */
+             height: auto !important; 
+             min-height: 150px !important; 
+           }
         }
 
         .device-preview-wrapper.mobile .hero-premium { padding: 120px 20px !important; }
         .device-preview-wrapper.mobile .hero-premium h1 { font-size: 3rem !important; }
         .device-preview-wrapper.mobile .hero-premium p { font-size: 1.1rem !important; }
         .device-preview-wrapper.mobile .responsive-grid { display: flex !important; flex-direction: column !important; gap: 20px !important; }
-        .device-preview-wrapper.mobile .bento-block-mobile { grid-column: unset !important; grid-row: unset !important; width: 100% !important; height: auto !important; min-height: 250px !important; aspect-ratio: auto !important; }
+        .device-preview-wrapper.mobile .bento-block-mobile { 
+             grid-column: unset !important; 
+             grid-row: unset !important; 
+             width: 100% !important; 
+             height: auto !important; 
+             min-height: 150px !important; 
+        }
 
         /* Simulated Tablet View */
         .device-preview-wrapper.tablet .hero-premium { padding: 120px 40px !important; }
