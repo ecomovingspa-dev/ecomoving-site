@@ -117,8 +117,8 @@ const BentoBlock = ({ block, designMode, assets, handleDrop, entryIndex, onClick
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       style={{
-        gridColumn: `${(block.col * 2) - 1} / span ${spanW * 2}`,
-        gridRow: `${(block.row * 6) - 5} / span ${spanH * 6}`,
+        gridColumn: `${block.col} / span ${spanW}`,
+        gridRow: `${block.row} / span ${spanH}`,
         zIndex: block.zIndex || 1,
         position: 'relative',
         background: block.gradient
