@@ -15,6 +15,7 @@ export interface HeroContent {
     meta_title?: string;
     gallery?: string[];
     drive_folder_id?: string;
+    title?: string;
 }
 
 export interface LayoutBlock {
@@ -62,6 +63,7 @@ export interface DynamicSection {
     descSpan?: number;  // 1-24
     gallery?: string[];
     seo_keywords?: string;
+    title?: string;
 }
 
 export interface GridCell {

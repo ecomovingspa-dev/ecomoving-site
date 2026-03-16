@@ -310,13 +310,13 @@ export default function Home() {
 
         <div style={{ position: 'relative', zIndex: 2, textAlign: 'center', maxWidth: '1000px', padding: '0 20px' }}>
           <motion.h1
-            key={content.hero.title1}
+            key={content.hero.title || content.hero.title1}
             initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 1 }}
             style={{ fontSize: 'min(5rem, 10vw)', fontFamily: 'var(--font-heading)', lineHeight: 1.1, marginBottom: '20px', textTransform: 'uppercase' }}
           >
-            {content.hero.title1}
+            {content.hero.title || content.hero.title1}
           </motion.h1>
           <motion.p
             key={content.hero.paragraph1}
