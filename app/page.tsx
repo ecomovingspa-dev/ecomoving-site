@@ -248,7 +248,7 @@ export default function Home() {
                   block={block}
                   entryIndex={idx}
                 />
-              );
+              ));
             })()}
           </div>
 
