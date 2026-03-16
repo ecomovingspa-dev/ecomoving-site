@@ -555,7 +555,7 @@ export default function Home() {
   const hasBlocks = masterSection && masterSection.blocks && masterSection.blocks.length > 0;
 
   return (
-    <main style={{ backgroundColor: 'var(--eco-bg-primary)', color: 'white', minHeight: '100vh', fontFamily: 'var(--font-body)' }}>
+    <main className={designMode ? 'design-mode' : ''} style={{ backgroundColor: 'var(--eco-bg-primary)', color: 'white', minHeight: '100vh', fontFamily: 'var(--font-body)' }}>
       <motion.div
         style={{
           position: 'fixed', top: 0, left: 0, right: 0, height: '4px',
@@ -612,7 +612,7 @@ export default function Home() {
 
       <div style={{ padding: '80px 0 0 0', minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', backgroundColor: previewMode !== 'desktop' ? '#111' : 'transparent' }}>
         <div 
-          className={`device-preview-wrapper ${previewMode}`}
+          className={`device-preview-wrapper ${previewMode} ${designMode ? 'design-active' : ''}`}
           style={{
             width: previewMode === 'desktop' ? '100%' : previewMode === 'tablet' ? '768px' : '375px',
             backgroundColor: 'var(--eco-bg-primary)',
@@ -869,13 +869,13 @@ export default function Home() {
           }
         }
         
-        /* Mobile Breakpoint OR Simulated Mobile View */
+        /* Mobile Breakpoint: Only stack if NOT in design mode */
         @media (max-width: 768px) {
-           .hero-premium { padding: 120px 20px !important; }
-           .hero-premium h1 { font-size: 3rem !important; }
-           .hero-premium p { font-size: 1.1rem !important; }
-           .responsive-grid { display: flex !important; flex-direction: column !important; gap: 20px !important; }
-           .bento-block-mobile { 
+           main:not(.design-mode) .hero-premium { padding: 120px 20px !important; }
+           main:not(.design-mode) h1 { font-size: 3rem !important; }
+           main:not(.design-mode) p { font-size: 1.1rem !important; }
+           main:not(.design-mode) .responsive-grid { display: flex !important; flex-direction: column !important; gap: 20px !important; }
+           main:not(.design-mode) .bento-block-mobile { 
              grid-column: unset !important; 
              grid-row: unset !important; 
              width: 100% !important; 
@@ -885,11 +885,12 @@ export default function Home() {
            }
         }
 
-        .device-preview-wrapper.mobile .hero-premium { padding: 120px 20px !important; }
-        .device-preview-wrapper.mobile .hero-premium h1 { font-size: 3rem !important; }
-        .device-preview-wrapper.mobile .hero-premium p { font-size: 1.1rem !important; }
-        .device-preview-wrapper.mobile .responsive-grid { display: flex !important; flex-direction: column !important; gap: 20px !important; }
-        .device-preview-wrapper.mobile .bento-block-mobile { 
+        /* Simulator Mobile: Only stack if NOT in design mode */
+        .device-preview-wrapper.mobile:not(.design-active) .hero-premium { padding: 120px 20px !important; }
+        .device-preview-wrapper.mobile:not(.design-active) .hero-premium h1 { font-size: 3rem !important; }
+        .device-preview-wrapper.mobile:not(.design-active) .hero-premium p { font-size: 1.1rem !important; }
+        .device-preview-wrapper.mobile:not(.design-active) .responsive-grid { display: flex !important; flex-direction: column !important; gap: 20px !important; }
+        .device-preview-wrapper.mobile:not(.design-active) .bento-block-mobile { 
              grid-column: unset !important; 
              grid-row: unset !important; 
              width: 100% !important; 
@@ -898,29 +899,30 @@ export default function Home() {
              aspect-ratio: var(--mobile-aspect) !important;
         }
 
-        /* Simulated Tablet View */
-        .device-preview-wrapper.tablet .hero-premium { padding: 120px 40px !important; }
-        .device-preview-wrapper.tablet .hero-premium h1 { font-size: 4rem !important; }
-        .device-preview-wrapper.tablet .responsive-grid { 
+        /* Simulator Tablet: Only stack if NOT in design mode */
+        .device-preview-wrapper.tablet:not(.design-active) .hero-premium { padding: 120px 40px !important; }
+        .device-preview-wrapper.tablet:not(.design-active) .hero-premium h1 { font-size: 4rem !important; }
+        .device-preview-wrapper.tablet:not(.design-active) .responsive-grid { 
            display: grid !important; 
            grid-template-columns: repeat(2, 1fr) !important; 
            gap: 20px !important; 
         }
-        .device-preview-wrapper.tablet .bento-block-mobile { 
+        .device-preview-wrapper.tablet:not(.design-active) .bento-block-mobile { 
            grid-column: unset !important; 
            grid-row: unset !important;
            aspect-ratio: var(--mobile-aspect) !important;
         }
 
+        /* Real Tablet: Only stack if NOT in design mode */
         @media (min-width: 769px) and (max-width: 1024px) {
-           .hero-premium { padding: 120px 40px !important; }
-           .hero-premium h1 { font-size: 4rem !important; }
-           .responsive-grid { 
+           main:not(.design-mode) .hero-premium { padding: 120px 40px !important; }
+           main:not(.design-mode) h1 { font-size: 4rem !important; }
+           main:not(.design-mode) .responsive-grid { 
               display: grid !important; 
               grid-template-columns: repeat(2, 1fr) !important; 
               gap: 20px !important; 
            }
-           .bento-block-mobile { 
+           main:not(.design-mode) .bento-block-mobile { 
               grid-column: unset !important; 
               grid-row: unset !important; 
               aspect-ratio: var(--mobile-aspect) !important; 
