@@ -7,10 +7,14 @@ import { useWebContent } from '@/lib/useWebContent';
 import VisualGallery from '@/components/VisualGallery';
 import ProductCatalog from '@/components/ProductCatalog';
 
-const BentoBlock = ({ block }: { block: any }) => {
+const BentoBlock = ({ block, entryIndex }: { block: any, entryIndex: number }) => {
+  const cardRef = React.useRef<HTMLDivElement>(null);
   const [currentIdx, setCurrentIdx] = useState(0);
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const [isHovered, setIsHovered] = useState(false);
+
   const images = block.gallery && block.gallery.length > 0 ? block.gallery : [block.image].filter(Boolean);
-  const [spanW, spanH] = (block.span || '4x1').split('x').map((n: string) => parseInt(n) || 1);
+  const [spanW, spanH] = (block.span || '4x4').split('x').map((n: string) => parseInt(n) || 1);
   const isText = block.type === 'text' || block.type === 'both';
   const isImage = block.type === 'image' || block.type === 'both' || !block.type;
 
@@ -19,6 +23,17 @@ const BentoBlock = ({ block }: { block: any }) => {
     soft: '0 10px 30px rgba(0,0,0,0.3)',
     strong: '0 20px 60px rgba(0,0,0,0.6)',
     neon: `0 0 30px ${block.bgColor}88`
+  };
+
+  const zoom = block.transform_zoom || 1;
+  const posX = block.transform_posX ?? 50;
+  const posY = block.transform_posY ?? 50;
+  const aspectRatio = block.transform_aspectRatio || (block.isCircle ? '1/1' : 'auto');
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!cardRef.current) return;
+    const rect = cardRef.current.getBoundingClientRect();
+    setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
   };
 
   useEffect(() => {
@@ -30,46 +45,72 @@ const BentoBlock = ({ block }: { block: any }) => {
     }
   }, [images.length]);
 
+  const anim = useMemo(() => {
+    const type = block.galleryAnimation || 'fade';
+    const targetScale = isHovered ? zoom * 1.06 : zoom;
+    switch (type) {
+      case 'slide-h': return { initial: { opacity: 0, x: '100%' }, animate: { opacity: 1, x: 0, scale: targetScale }, exit: { opacity: 0, x: '-100%' } };
+      case 'slide-v': return { initial: { opacity: 0, y: '100%' }, animate: { opacity: 1, y: 0, scale: targetScale }, exit: { opacity: 0, y: '-100%' } };
+      case 'zoom': return { initial: { opacity: 0, scale: targetScale * 0.5 }, animate: { opacity: 1, scale: targetScale }, exit: { opacity: 0, scale: targetScale * 1.5 } };
+      case 'crossfade': return { initial: { opacity: 0, scale: targetScale }, animate: { opacity: 1, scale: targetScale }, exit: { opacity: 0, scale: targetScale } };
+      default: return { initial: { opacity: 0, scale: targetScale * 1.02 }, animate: { opacity: 1, scale: targetScale }, exit: { opacity: 0, scale: targetScale * 0.98 } };
+    }
+  }, [block.galleryAnimation, zoom, isHovered]);
+
   return (
     <motion.div
+      ref={cardRef}
       layoutId={block.id}
-      initial={{ opacity: 0, scale: 0.9 }}
-      whileInView={{ opacity: 1, scale: 1 }}
-      viewport={{ once: true }}
+      className="bento-block-mobile"
+      initial={{ opacity: 0, y: 40 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: '-80px' }}
+      transition={{ delay: (entryIndex % 6) * 0.08, duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+      onMouseMove={handleMouseMove}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       style={{
         gridColumn: `${block.col} / span ${spanW}`,
         gridRow: `${block.row} / span ${spanH}`,
         zIndex: block.zIndex || 1,
         position: 'relative',
-        background: block.gradient
-          ? `linear-gradient(135deg, ${block.bgColor}, ${block.bgColor}dd)`
-          : (block.bgColor || '#111'),
-        borderRadius: block.isCircle ? '50%' : (block.borderRadius || '32px'),
-        aspectRatio: block.isCircle ? '1/1' : 'auto',
-        boxShadow: shadowStyles[block.shadow as keyof typeof shadowStyles] || shadowStyles.none,
+        background: block.gradient ? `linear-gradient(135deg, ${block.bgColor}, ${block.bgColor}dd)` : (block.bgColor || '#111'),
+        borderRadius: block.isCircle ? '50%' : (block.borderRadius || '12px'),
+        aspectRatio: aspectRatio,
+        ...({ '--mobile-aspect': `${spanW} / ${spanH}` } as any),
+        boxShadow: isHovered ? (shadowStyles[block.shadow as keyof typeof shadowStyles] || '0 20px 60px rgba(0,0,0,0.5)') : (shadowStyles[block.shadow as keyof typeof shadowStyles] || shadowStyles.none),
         backdropFilter: block.blur ? `blur(${block.blur})` : 'none',
         overflow: 'hidden',
         display: 'flex', flexDirection: 'column',
         justifyContent: 'center', alignItems: 'center',
         padding: isText ? '40px' : '0',
-        border: block.borderColor ? `1px solid ${block.borderColor}` : 'none',
-        cursor: block.link ? 'pointer' : 'default'
+        border: isHovered ? `1px solid ${block.borderColor || 'rgba(255,255,255,0.10)'}` : `1px solid ${block.borderColor || 'rgba(255,255,255,0.03)'}`,
+        cursor: block.link ? 'pointer' : 'default',
+        margin: '4px',
+        transition: 'border-color 0.4s ease, box-shadow 0.4s ease, transform 0.4s cubic-bezier(0.16,1,0.3,1)'
       }}
+      whileHover={{ scale: 1.012, y: -4 }}
     >
+      <div style={{
+        position: 'absolute', inset: 0, zIndex: 10, borderRadius: 'inherit', pointerEvents: 'none',
+        background: `radial-gradient(500px circle at ${mousePos.x}px ${mousePos.y}px, rgba(255,255,255,0.055), transparent 45%)`,
+        opacity: isHovered ? 1 : 0, transition: 'opacity 0.3s ease'
+      }} />
+
       {isImage && (
-        <div style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
+        <div style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow: 'hidden' }}>
           <AnimatePresence mode="wait">
             <motion.img
               key={`${block.id}-${currentIdx}`}
-              initial={{ opacity: 0, scale: 1.1 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 1.2, ease: "easeInOut" }}
+              initial={anim.initial}
+              animate={anim.animate}
+              exit={anim.exit}
+              transition={{ duration: 0.8 }}
               src={images[currentIdx] || 'https://via.placeholder.com/800x600?text=Ecomoving'}
               style={{
-                width: '100%', height: '100%', objectFit: 'cover',
-                opacity: block.type === 'both' ? 0.4 : 1,
-                zIndex: 1
+                position: 'absolute', width: '100%', height: '100%', objectFit: 'cover',
+                objectPosition: `${posX}% ${posY}%`,
+                opacity: block.type === 'both' ? 0.4 : 1, zIndex: 1
               }}
               alt={block.label}
             />
@@ -77,29 +118,33 @@ const BentoBlock = ({ block }: { block: any }) => {
         </div>
       )}
 
-      {isText && (
+      {(block.blockTitle || block.blockParagraph) && (
         <div style={{
-          zIndex: 2, color: block.textColor || '#fff',
-          textAlign: block.textAlign || 'center',
-          fontSize: block.fontSize || '1.4rem',
-          fontWeight: 800, width: '100%',
-          textShadow: '0 2px 15px rgba(0,0,0,0.5)',
-          writingMode: block.writingMode || 'horizontal-tb',
-          transform: block.writingMode && block.writingMode !== 'horizontal-tb' ? 'rotate(180deg)' : 'none',
-          padding: '20px'
+          position: 'absolute', zIndex: 20, pointerEvents: 'none',
+          top: block.textPadding || '30px', left: block.textPadding || '30px',
+          right: block.textPadding || '30px', bottom: block.textPadding || '30px',
+          display: 'flex', flexDirection: 'column',
+          alignItems: block.textAlign === 'center' ? 'center' : (block.textAlign === 'right' ? 'flex-end' : 'flex-start'),
+          justifyContent: block.textVerticalAlign || 'flex-start'
         }}>
-          {block.textContent && <h3 style={{ margin: 0, lineHeight: 1.2, textTransform: 'uppercase' }}>{block.textContent}</h3>}
-          {block.subText && (
-            <p style={{
-              margin: '15px 0 0 0',
-              fontWeight: 400,
-              fontSize: '0.9rem',
-              opacity: 0.9,
-              fontFamily: 'var(--font-body)',
-              textShadow: 'none',
-              lineHeight: 1.6
+          {block.blockTitle && (
+            <h2 style={{
+              margin: '0 0 15px 0', color: block.textColor || '#ffffff',
+              fontSize: block.titleSize || '2rem', fontWeight: 700,
+              textAlign: block.textAlign || 'left', textShadow: '0 4px 20px rgba(0,0,0,0.6)',
+              lineHeight: 1.1, maxWidth: '90%'
             }}>
-              {block.subText}
+              {block.blockTitle}
+            </h2>
+          )}
+          {block.blockParagraph && (
+            <p style={{
+              margin: 0, color: block.textColor ? `${block.textColor}dd` : '#cccccc',
+              fontSize: block.paragraphSize || '1rem', fontWeight: 400,
+              textAlign: block.textAlign || 'left', maxWidth: '600px',
+              textShadow: '0 2px 10px rgba(0,0,0,0.8)', lineHeight: 1.5
+            }}>
+              {block.blockParagraph}
             </p>
           )}
         </div>
@@ -107,6 +152,7 @@ const BentoBlock = ({ block }: { block: any }) => {
     </motion.div>
   );
 };
+
 
 export default function Home() {
   const { scrollYProgress } = useScroll();
@@ -182,36 +228,27 @@ export default function Home() {
             </div>
           </motion.div>
 
-          {/* Grilla Maestro 24x4 */}
-          <div style={{
-            display: 'grid', gridTemplateColumns: 'repeat(24, 1fr)', gridAutoRows: 'minmax(75px, auto)',
-            gap: '10px', position: 'relative', padding: '20px',
-            minHeight: '620px', marginBottom: '80px'
+          {/* Grilla Maestro 48x48 con resolución micro (15px) */}
+          <div className="responsive-grid" style={{
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(48, 1fr)', 
+            gridAutoRows: '15px',
+            gap: '0px', 
+            position: 'relative', 
+            padding: '20px',
+            width: '100%',
+            backgroundColor: 'transparent',
+            overflow: 'visible'
           }}>
             {(() => {
-              // Filtrar y ordenar bloques de texto para inyección automática de contenido SEO
               const allBlocks = (section.blocks as any[]) || [];
-              const textBlocks = [...allBlocks]
-                .filter((b: any) => b.type === 'text')
-                .sort((a: any, b: any) => (a.row - b.row) || (a.col - b.col));
-
-              return allBlocks.map((block: any) => {
-                let injectedContent = block.textContent;
-                let injectedSubText = block.subText;
-
-                // Inyectar Título 2 y Descripción 2 en el PRIMER bloque de texto encontrado
-                if (textBlocks[0]?.id === block.id) {
-                  if (section.title2) injectedContent = section.title2;
-                  if (section.paragraph2) injectedSubText = section.paragraph2;
-                }
-
-                return (
-                  <BentoBlock
-                    key={block.id}
-                    block={{ ...block, textContent: injectedContent, subText: injectedSubText }}
-                  />
-                );
-              });
+              return allBlocks.map((block: any, idx: number) => (
+                <BentoBlock
+                  key={block.id}
+                  block={block}
+                  entryIndex={idx}
+                />
+              );
             })()}
           </div>
 

@@ -2121,3 +2121,39 @@ p {
   letter-spacing: 2px;
   font-weight: 300;
 }
+
+/* --- New 48-Column Responsive Grid --- */
+.responsive-grid {
+  display: grid;
+  grid-template-columns: repeat(48, 1fr);
+  grid-auto-rows: 15px;
+  width: 100%;
+  position: relative;
+}
+
+@media (max-width: 1024px) {
+  .responsive-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    padding: 20px;
+  }
+
+  .bento-block-mobile {
+    grid-column: auto !important;
+    grid-row: auto !important;
+    width: 100% !important;
+    height: auto !important;
+    aspect-ratio: var(--mobile-aspect, 16/9) !important;
+  }
+}
+
+.bento-block-mobile {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.bento-block-mobile:hover {
+  transform: translateY(-4px) scale(1.01);
+}
