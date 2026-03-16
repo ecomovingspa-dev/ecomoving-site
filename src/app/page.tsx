@@ -881,7 +881,7 @@ export default function Home() {
              width: 100% !important; 
              height: auto !important; 
              min-height: 150px !important; 
-             aspect-ratio: var(--mobile-aspect) !important;
+             aspect-ratio: 1 / 1 !important; 
            }
         }
 
@@ -895,7 +895,7 @@ export default function Home() {
              width: 100% !important; 
              height: auto !important; 
              min-height: 150px !important; 
-             aspect-ratio: var(--mobile-aspect) !important;
+             aspect-ratio: 1 / 1 !important;
         }
 
         /* Simulated Tablet View */
