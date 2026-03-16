@@ -881,7 +881,7 @@ export default function Home() {
              width: 100% !important; 
              height: auto !important; 
              min-height: 150px !important; 
-             aspect-ratio: 1 / 1 !important; 
+             aspect-ratio: var(--mobile-aspect) !important; 
            }
         }
 
@@ -893,9 +893,9 @@ export default function Home() {
              grid-column: unset !important; 
              grid-row: unset !important; 
              width: 100% !important; 
-             height: auto !important; 
+             height: auto !important;
              min-height: 150px !important; 
-             aspect-ratio: 1 / 1 !important;
+             aspect-ratio: var(--mobile-aspect) !important;
         }
 
         /* Simulated Tablet View */
@@ -908,8 +908,8 @@ export default function Home() {
         }
         .device-preview-wrapper.tablet .bento-block-mobile { 
            grid-column: unset !important; 
-           grid-row: unset !important; 
-           aspect-ratio: 1/1 !important; 
+           grid-row: unset !important;
+           aspect-ratio: var(--mobile-aspect) !important;
         }
 
         @media (min-width: 769px) and (max-width: 1024px) {
@@ -923,7 +923,7 @@ export default function Home() {
            .bento-block-mobile { 
               grid-column: unset !important; 
               grid-row: unset !important; 
-              aspect-ratio: 1/1 !important; 
+              aspect-ratio: var(--mobile-aspect) !important; 
            }
         }
       `}</style>
