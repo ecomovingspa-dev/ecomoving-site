@@ -601,16 +601,18 @@ export default function Home() {
       >
         <div style={{ position: 'absolute', inset: 0, zIndex: 0 }}>
           <AnimatePresence mode="popLayout">
-            <motion.img
-              key={currentHeroSlide}
-              initial={{ opacity: 0, scale: 1.05 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 1.5, ease: [0.4, 0, 0.2, 1] }}
-              src={heroImages[currentHeroSlide] || assets.hero}
-              alt="Ecomoving"
-              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
-            />
+            {(heroImages[currentHeroSlide] || assets.hero) ? (
+              <motion.img
+                key={currentHeroSlide}
+                initial={{ opacity: 0, scale: 1.05 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 1.5, ease: [0.4, 0, 0.2, 1] }}
+                src={heroImages[currentHeroSlide] || assets.hero}
+                alt="Ecomoving"
+                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+              />
+            ) : null}
           </AnimatePresence>
           <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(circle, transparent 20%, rgba(0,0,0,0.8) 120%)' }} />
         </div>
