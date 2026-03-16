@@ -99,22 +99,24 @@ const BentoBlock = ({ block, entryIndex }: { block: any, entryIndex: number }) =
 
       {isImage && (
         <div style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow: 'hidden' }}>
-          <AnimatePresence mode="wait">
-            <motion.img
-              key={`${block.id}-${currentIdx}`}
-              initial={anim.initial}
-              animate={anim.animate}
-              exit={anim.exit}
-              transition={{ duration: 0.8 }}
-              src={images[currentIdx] || ''}
-              style={{
-                position: 'absolute', width: '100%', height: '100%', objectFit: 'cover',
-                objectPosition: `${posX}% ${posY}%`,
-                opacity: block.type === 'both' ? 0.4 : 1, zIndex: 1
-              }}
-              alt={block.label}
-            />
-          </AnimatePresence>
+            <AnimatePresence mode="wait">
+              {images[currentIdx] ? (
+                <motion.img
+                  key={`${block.id}-${currentIdx}`}
+                  initial={anim.initial}
+                  animate={anim.animate}
+                  exit={anim.exit}
+                  transition={{ duration: 0.8 }}
+                  src={images[currentIdx]}
+                  style={{
+                    position: 'absolute', width: '100%', height: '100%', objectFit: 'cover',
+                    objectPosition: `${posX}% ${posY}%`,
+                    opacity: block.type === 'both' ? 0.4 : 1, zIndex: 1
+                  }}
+                  alt={block.label}
+                />
+              ) : null}
+            </AnimatePresence>
         </div>
       )}
 
