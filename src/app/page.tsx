@@ -398,6 +398,7 @@ export default function Home() {
     updateSection('sections', newSections);
   }, [previewSections, content, updateSection]);
 
+  /* 
   useEffect(() => {
     const saved = localStorage.getItem('ecomoving_assets');
     if (saved) {
@@ -408,6 +409,7 @@ export default function Home() {
       }
     }
   }, []);
+  */
 
   // ── Purga de huérfanos: cuando cambia el contenido, limpia keys obsoletas del localStorage ──
   useEffect(() => {
@@ -456,10 +458,9 @@ export default function Home() {
     e.preventDefault();
     const url = e.dataTransfer.getData('image_url')?.trim();
     if (!url) return;
-    // Sobreescribe la key del bloque → no acumula basura, 1 slot = 1 URL
     const newAssets = { ...assets, [blockId]: url };
     setAssets(newAssets);
-    localStorage.setItem('ecomoving_assets', JSON.stringify(newAssets));
+    // localStorage.setItem('ecomoving_assets', JSON.stringify(newAssets));
   };
 
 
