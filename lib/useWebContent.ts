@@ -117,7 +117,8 @@ export function useWebContent() {
         try {
             const { data, error: fetchError } = await supabase
                 .from('web_contenido')
-                .select('section, content');
+                .select('section, content', { count: 'exact' })
+                .order('section');
 
             if (fetchError) {
                 console.warn('Supabase fetch error (using defaults):', fetchError);
