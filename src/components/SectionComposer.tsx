@@ -35,7 +35,7 @@ export default function SectionComposer({ isOpen, onClose, content, onSave, onCh
     const [catalogLoading, setCatalogLoading] = useState(false);
     const catalogSearchRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    // Sincronización única: Forzar modo 'Lienzo Infinito'
+    // Sincronización única: Forzar modo 'Lienzo Infinito' al abrir el modal
     useEffect(() => {
         if (isOpen) {
             let masterSection: DynamicSection | undefined;
@@ -54,7 +54,7 @@ export default function SectionComposer({ isOpen, onClose, content, onSave, onCh
                     id: 'infinite_grid',
                     order: 1,
                     title1: 'LIENZO INFINITO',
-                    paragraph1: 'Grid maestra de 24 columnas.',
+                    paragraph1: 'Grid maestra de 48 columnas.',
                     bgColor: '#0a0a0a',
                     blocks: []
                 };
@@ -62,7 +62,8 @@ export default function SectionComposer({ isOpen, onClose, content, onSave, onCh
                 setActiveSectionId('infinite_grid');
             }
         }
-    }, [isOpen, content?.sections]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen]); // Solo reinicia cuando se ABRE el modal, no cuando cambia el contenido externo
 
     // EFECTO VISTA PREVIA EN VIVO
     useEffect(() => {
