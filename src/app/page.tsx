@@ -167,8 +167,8 @@ const BentoBlock = ({ block, designMode, assets, handleDrop, entryIndex, onClick
         />
       )}
 
-      {designMode && (
-        <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 10, background: 'rgba(255,255,255,0.1)', color: 'white', fontSize: '9px', padding: '2px 6px', borderRadius: '4px', opacity: 0.5 }}>
+      {designMode && block.label && (
+        <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 10, background: 'rgba(0,212,189,0.1)', color: '#00d4bd', fontSize: '9px', padding: '2px 6px', borderRadius: '4px', opacity: 0.8, textTransform: 'uppercase', letterSpacing: '1px' }}>
           {block.label}
         </div>
       )}
@@ -182,24 +182,35 @@ const BentoBlock = ({ block, designMode, assets, handleDrop, entryIndex, onClick
             <PeekCarousel images={images} mode="full" />
           ) : (
             <AnimatePresence mode="wait">
-              <motion.img
-                key={`${block.id}-${currentIdx}`}
-                initial={anim.initial}
-                animate={anim.animate}
-                exit={anim.exit}
-                transition={{ duration: 0.8, ease: [0.4, 0, 0.2, 1] }}
-                src={images[currentIdx] || ''}
-                style={{
-                  position: 'absolute',
-                  width: '100%', height: '100%',
-                  objectFit: 'cover',
-                  objectPosition: `${posX}% ${posY}%`,
-                  opacity: block.type === 'both' ? 0.4 : 1,
-                  zIndex: 1,
-                  transition: 'object-position 0.2s ease-out'
-                }}
-                alt={block.label}
-              />
+              {images[currentIdx] ? (
+                <motion.img
+                  key={`${block.id}-${currentIdx}`}
+                  initial={anim.initial}
+                  animate={anim.animate}
+                  exit={anim.exit}
+                  transition={{ duration: 0.8, ease: [0.4, 0, 0.2, 1] }}
+                  src={images[currentIdx]}
+                  style={{
+                    position: 'absolute',
+                    width: '100%', height: '100%',
+                    objectFit: 'cover',
+                    objectPosition: `${posX}% ${posY}%`,
+                    opacity: block.type === 'both' ? 0.4 : 1,
+                    zIndex: 1,
+                    transition: 'object-position 0.2s ease-out'
+                  }}
+                  alt={block.label}
+                />
+              ) : (
+                <motion.div 
+                  key="empty-image"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.02)' }}
+                >
+                  {designMode && <ImageIcon className="w-6 h-6 text-white/10" />}
+                </motion.div>
+              )}
             </AnimatePresence>
           )}
         </div>
