@@ -49,7 +49,7 @@ const BentoBlock = ({ block, designMode, assets, handleDrop, entryIndex, onClick
   let images = (!isPeek && assets[block.id]) ? [assets[block.id]] : validImages;
   
   if (images.length === 0) {
-      images = designMode ? ['https://via.placeholder.com/800x600?text=Arrastra+una+imagen+aqui'] : [];
+      images = designMode ? [] : [];
   }
   const [spanW, spanH] = (block.span || '4x1').split('x').map((n: string) => parseInt(n) || 1);
   const isText = block.type === 'text' || block.type === 'both';
@@ -188,7 +188,7 @@ const BentoBlock = ({ block, designMode, assets, handleDrop, entryIndex, onClick
                 animate={anim.animate}
                 exit={anim.exit}
                 transition={{ duration: 0.8, ease: [0.4, 0, 0.2, 1] }}
-                src={images[currentIdx] || 'https://via.placeholder.com/800x600?text=Ecomoving'}
+                src={images[currentIdx] || ''}
                 style={{
                   position: 'absolute',
                   width: '100%', height: '100%',
@@ -314,7 +314,7 @@ export default function Home() {
 
   // Asset State
   const [assets, setAssets] = useState<Record<string, string>>({
-    hero: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?q=80&w=2013&auto=format&fit=crop',
+    hero: '',
   });
 
   const handleComposerChange = useCallback((newSections: DynamicSection[]) => {
@@ -363,7 +363,7 @@ export default function Home() {
     }, 1);
     const newBlock = {
       id: `block_${Date.now()}`,
-      label: 'NUEVO BLOQUE', type: 'image',
+      label: '', type: 'image',
       span: '12x8', col: 1, row: nextRow,
       zIndex: 1, opacity: 1, borderRadius: '0px', shadow: 'none' as const,
       textAlign: 'center' as const, gallery: []

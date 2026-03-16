@@ -132,11 +132,11 @@ export interface WebContent {
 
 const defaultContent: WebContent = {
     hero: {
-        title1: 'ECOMOVING: MERCHANDISING SUSTENTABLE Y DISEÑO PREMIUM',
-        paragraph1: 'Elevamos tu marca con productos corporativos de alto impacto y conciencia ecológica.',
-        cta_text: 'EXPLORAR CATÁLOGO 2026',
-        cta_link: '/catalogo',
-        background_image: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?q=80&w=2013&auto=format&fit=crop',
+        title1: '',
+        paragraph1: '',
+        cta_text: '',
+        cta_link: '',
+        background_image: '',
     },
     sections: []
 };

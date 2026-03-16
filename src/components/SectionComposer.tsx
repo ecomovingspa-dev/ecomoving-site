@@ -165,7 +165,7 @@ export default function SectionComposer({ isOpen, onClose, content, onSave, onCh
 
             const newBlock: LayoutBlock = {
                 id: `block_${Date.now()}`,
-                label: 'BLOQUE NUEVO',
+                label: '',
                 image: '',
                 span: '12x8', // Adaptado a grilla 48x48
                 col: 1,
