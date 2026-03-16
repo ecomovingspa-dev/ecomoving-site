@@ -218,10 +218,8 @@ export function useWebContent() {
             let merged;
 
             if (Array.isArray(currentSection)) {
-                // Si es un array, el 'newContentData' ya es el nuevo array completo
                 merged = newContentData;
             } else {
-                // Si es un objeto, lo mezclamos
                 merged = { ...currentSection, ...newContentData };
             }
 
@@ -235,7 +233,11 @@ export function useWebContent() {
                     onConflict: 'section'
                 });
 
-            if (updateError) throw updateError;
+            if (updateError) {
+                console.error('Error updating section:', updateError);
+                alert(`Error al guardar sección ${section}: ${updateError.message}`);
+                throw updateError;
+            }
 
             setContent(prev => ({
                 ...prev,

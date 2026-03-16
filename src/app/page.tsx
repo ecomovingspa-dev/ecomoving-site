@@ -458,9 +458,28 @@ export default function Home() {
     e.preventDefault();
     const url = e.dataTransfer.getData('image_url')?.trim();
     if (!url) return;
+
+    // 1. Actualización Visual Inmediata (Local)
     const newAssets = { ...assets, [blockId]: url };
     setAssets(newAssets);
-    // localStorage.setItem('ecomoving_assets', JSON.stringify(newAssets));
+
+    // 2. Persistencia Real en Base de Datos (Supabase)
+    const source = previewSections || content?.sections;
+    if (!Array.isArray(source)) return;
+
+    const newSections = source.map((s: any) => {
+      if (!s.blocks) return s;
+      return { 
+        ...s, 
+        blocks: s.blocks.map((b: any) => 
+          b.id === blockId ? { ...b, image: url, gallery: [url] } : b
+        ) 
+      };
+    });
+
+    setPreviewSections(newSections);
+    await updateSection('sections', newSections);
+    console.log(`[Constructor] Imagen persistida en bloque ${blockId}: ${url}`);
   };
 
 
