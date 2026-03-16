@@ -901,6 +901,31 @@ export default function Home() {
         /* Simulated Tablet View */
         .device-preview-wrapper.tablet .hero-premium { padding: 120px 40px !important; }
         .device-preview-wrapper.tablet .hero-premium h1 { font-size: 4rem !important; }
+        .device-preview-wrapper.tablet .responsive-grid { 
+           display: grid !important; 
+           grid-template-columns: repeat(2, 1fr) !important; 
+           gap: 20px !important; 
+        }
+        .device-preview-wrapper.tablet .bento-block-mobile { 
+           grid-column: unset !important; 
+           grid-row: unset !important; 
+           aspect-ratio: 1/1 !important; 
+        }
+
+        @media (min-width: 769px) and (max-width: 1024px) {
+           .hero-premium { padding: 120px 40px !important; }
+           .hero-premium h1 { font-size: 4rem !important; }
+           .responsive-grid { 
+              display: grid !important; 
+              grid-template-columns: repeat(2, 1fr) !important; 
+              gap: 20px !important; 
+           }
+           .bento-block-mobile { 
+              grid-column: unset !important; 
+              grid-row: unset !important; 
+              aspect-ratio: 1/1 !important; 
+           }
+        }
       `}</style>
     </main>
   );
