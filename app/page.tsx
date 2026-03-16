@@ -106,7 +106,7 @@ const BentoBlock = ({ block, entryIndex }: { block: any, entryIndex: number }) =
               animate={anim.animate}
               exit={anim.exit}
               transition={{ duration: 0.8 }}
-              src={images[currentIdx] || 'https://via.placeholder.com/800x600?text=Ecomoving'}
+              src={images[currentIdx] || ''}
               style={{
                 position: 'absolute', width: '100%', height: '100%', objectFit: 'cover',
                 objectPosition: `${posX}% ${posY}%`,
@@ -168,7 +168,7 @@ export default function Home() {
   const heroImages = useMemo(() => {
     const h = content.hero;
     const imgs = [h.background_image, h.background_image_2, h.background_image_3, ...(h.gallery || [])].filter(Boolean);
-    return imgs.length > 0 ? imgs : ['https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?q=80&w=2013&auto=format&fit=crop'];
+    return imgs.length > 0 ? imgs : [''];
   }, [content.hero]);
 
   useEffect(() => {
