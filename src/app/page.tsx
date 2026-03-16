@@ -363,25 +363,54 @@ export default function Home() {
 
   // ── Agregar bloque nuevo ──
   const handleAddBlock = useCallback(() => {
-    const source = previewSections || content?.sections;
-    if (!Array.isArray(source)) return;
-    const ms = source.find((s: any) => s.id === 'infinite_grid') || (source.length === 1 ? source[0] : null);
+    let source = previewSections || content?.sections;
+    if (!Array.isArray(source)) source = [];
+    
+    // Buscar la sección de la grilla o crearla si está vacío
+    let ms = source.find((s: any) => s.id === 'infinite_grid' || (s.title1 && s.title1.includes('LIENZO')));
+    
+    if (!ms && source.length === 0) {
+      // Si todo está vacío, inicializamos la estructura base
+      ms = { 
+        id: 'infinite_grid', 
+        order: 1, 
+        title1: 'LIENZO INFINITO', 
+        paragraph1: 'Grid maestra de 48 columnas.', 
+        bgColor: '#0c0c0c', 
+        blocks: [] 
+      };
+      source = [ms];
+    } else if (!ms && source.length > 0) {
+      ms = source[0];
+    }
+
     if (!ms) return;
+
     const blocks = ms.blocks || [];
     const nextRow = blocks.reduce((acc: number, b: any) => {
       const [, h] = (b.span || '4x2').split('x').map(Number);
       return Math.max(acc, (b.row || 1) + (h || 2) + 3);
     }, 1);
+
     const newBlock = {
       id: `block_${Date.now()}`,
-      label: '', type: 'image',
-      span: '12x8', col: 1, row: nextRow,
-      zIndex: 1, opacity: 1, borderRadius: '0px', shadow: 'none' as const,
-      textAlign: 'center' as const, gallery: []
+      label: 'NUEVO BLOQUE', 
+      type: 'image' as const,
+      span: '24x20', 
+      col: 1, 
+      row: nextRow,
+      zIndex: 1, 
+      opacity: 1, 
+      borderRadius: '24px', 
+      shadow: 'none' as const,
+      textAlign: 'center' as const, 
+      gallery: []
     };
+
     const newSections = source.map((s: any) =>
       s.id === ms.id ? { ...s, blocks: [...(s.blocks || []), newBlock] } : s
     );
+
     setPreviewSections(newSections);
     updateSection('sections', newSections);
     setSelectedBlockId(newBlock.id);
