@@ -41,14 +41,14 @@ const BentoBlock = ({ block, designMode, assets, handleDrop, entryIndex, onClick
   let finalRow = block.row || 1;
   let finalSpan = block.span || '1x1';
 
-  if (currentMode === 'tablet' && block.tCol !== undefined) {
-    finalCol = block.tCol;
-    finalRow = block.tRow;
-    finalSpan = block.tSpan || finalSpan;
-  } else if (currentMode === 'mobile' && block.mCol !== undefined) {
-    finalCol = block.mCol;
-    finalRow = block.mRow;
-    finalSpan = block.mSpan || finalSpan;
+  if (currentMode === 'tablet') {
+    if (block.tCol !== undefined) finalCol = block.tCol;
+    if (block.tRow !== undefined) finalRow = block.tRow;
+    if (block.tSpan !== undefined) finalSpan = block.tSpan;
+  } else if (currentMode === 'mobile') {
+    if (block.mCol !== undefined) finalCol = block.mCol;
+    if (block.mRow !== undefined) finalRow = block.mRow;
+    if (block.mSpan !== undefined) finalSpan = block.mSpan;
   }
 
   const cardRef = React.useRef<HTMLDivElement>(null);
@@ -871,14 +871,14 @@ export default function Home() {
           // Mapear coordenadas actuales para el Inspector si estamos en responsive
           let mappedBlock = inspectedBlock ? { ...inspectedBlock } : null;
           if (mappedBlock) {
-             if (previewMode === 'tablet' && mappedBlock.tCol !== undefined) {
-               mappedBlock.col = mappedBlock.tCol;
-               mappedBlock.row = mappedBlock.tRow;
-               mappedBlock.span = mappedBlock.tSpan || mappedBlock.span;
-             } else if (previewMode === 'mobile' && mappedBlock.mCol !== undefined) {
-               mappedBlock.col = mappedBlock.mCol;
-               mappedBlock.row = mappedBlock.mRow;
-               mappedBlock.span = mappedBlock.mSpan || mappedBlock.span;
+             if (previewMode === 'tablet') {
+               if (mappedBlock.tCol !== undefined) mappedBlock.col = mappedBlock.tCol;
+               if (mappedBlock.tRow !== undefined) mappedBlock.row = mappedBlock.tRow;
+               if (mappedBlock.tSpan !== undefined) mappedBlock.span = mappedBlock.tSpan;
+             } else if (previewMode === 'mobile') {
+               if (mappedBlock.mCol !== undefined) mappedBlock.col = mappedBlock.mCol;
+               if (mappedBlock.mRow !== undefined) mappedBlock.row = mappedBlock.mRow;
+               if (mappedBlock.mSpan !== undefined) mappedBlock.span = mappedBlock.mSpan;
              }
           }
 
