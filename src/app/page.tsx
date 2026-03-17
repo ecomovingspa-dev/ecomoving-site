@@ -364,6 +364,33 @@ export default function Home() {
     setPreviewSections(newSections);
   }, []);
 
+  // ── INDEPENDENCIA AUTOMÁTICA: Popular campos responsive si faltan ──
+  useEffect(() => {
+    if (content?.sections && !previewSections) {
+      const source = content.sections;
+      const ms = source.find((s: any) => s.id === 'infinite_grid');
+      if (ms && ms.blocks) {
+        let changed = false;
+        const newBlocks = ms.blocks.map((b: any) => {
+          const updates: any = {};
+          if (b.tCol === undefined) { updates.tCol = b.col || 1; changed = true; }
+          if (b.tRow === undefined) { updates.tRow = b.row || 1; changed = true; }
+          if (b.tSpan === undefined) { updates.tSpan = b.span || '1x1'; changed = true; }
+          if (b.mCol === undefined) { updates.mCol = b.col || 1; changed = true; }
+          if (b.mRow === undefined) { updates.mRow = b.row || 1; changed = true; }
+          if (b.mSpan === undefined) { updates.mSpan = b.span || '1x1'; changed = true; }
+          return changed ? { ...b, ...updates } : b;
+        });
+
+        if (changed) {
+          const newSections = source.map((s: any) => s.id === ms.id ? { ...s, blocks: newBlocks } : s);
+          setPreviewSections(newSections);
+          updateSection('sections', newSections);
+        }
+      }
+    }
+  }, [content, previewSections, updateSection]);
+
   const handleComposerClose = useCallback(() => {
     setPreviewSections(null);
     setIsComposerOpen(false);
