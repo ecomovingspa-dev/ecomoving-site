@@ -1060,22 +1060,11 @@ export default function Home() {
            }
         }
         @media (max-width: 768px) {
-           /* On real mobile, we force a clean vertical stack for blocks without explicit mobile coordinates */
-           main:not(.design-mode) .responsive-grid {
-              grid-template-columns: 1fr !important;
-              grid-auto-rows: auto !important;
-              gap: 30px !important;
-              padding: 20px !important;
-           }
-
            main:not(.design-mode) .bento-block-mobile { 
-              grid-column: 1 / -1 !important;
-              grid-row: auto !important;
-              width: 100% !important;
-              height: auto !important;
-              aspect-ratio: var(--mobile-aspect, auto);
-              margin: 0 0 20px 0 !important;
-              min-height: 250px;
+              --final-col: var(--m-col) !important;
+              --final-row: var(--m-row) !important;
+              --final-span-w: var(--m-span-w) !important;
+              --final-span-h: var(--m-span-h) !important;
            }
         }
 
@@ -1087,11 +1076,10 @@ export default function Home() {
               --final-span-h: var(--t-span-h) !important;
         }
         .device-preview-wrapper.mobile:not(.design-active) .bento-block-mobile {
-              grid-column: 1 / -1 !important;
-              grid-row: auto !important;
-              width: 100% !important;
-              height: auto !important;
-              margin: 0 0 20px 0 !important;
+              --final-col: var(--m-col) !important;
+              --final-row: var(--m-row) !important;
+              --final-span-w: var(--m-span-w) !important;
+              --final-span-h: var(--m-span-h) !important;
         }
       `}</style>
     </main>
