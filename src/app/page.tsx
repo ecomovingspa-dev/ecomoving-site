@@ -48,7 +48,13 @@ const BentoBlock = ({ block, designMode, assets, handleDrop, entryIndex, onClick
   } else if (currentMode === 'mobile') {
     if (block.mCol !== undefined) finalCol = block.mCol;
     if (block.mRow !== undefined) finalRow = block.mRow;
-    if (block.mSpan !== undefined) finalSpan = block.mSpan;
+    if (block.mSpan !== undefined) {
+      finalSpan = block.mSpan;
+    } else {
+      // Si no hay mSpan, adaptamos el span de escritorio (usualmente 12) a 48 por defecto
+      const [w, h] = (block.span || '12x8').split('x').map((n: string) => parseInt(n) || 12);
+      finalSpan = `48x${h}`; // Por defecto full width en móvil si no se ha configurado
+    }
   }
 
   const cardRef = React.useRef<HTMLDivElement>(null);
@@ -56,9 +62,9 @@ const BentoBlock = ({ block, designMode, assets, handleDrop, entryIndex, onClick
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [isHovered, setIsHovered] = useState(false);
 
-  const [tSpanW, tSpanH] = (block.tSpan || block.span || '1x1').split('x').map((n: string) => parseInt(n) || 1);
-  const [mSpanW, mSpanH] = (block.mSpan || block.span || '1x1').split('x').map((n: string) => parseInt(n) || 1);
   // ── PRIORIDAD: override manual (drag) > gallery del bloque > imagen del bloque ──
+  const [mSpanW, mSpanH] = (block.mSpan || `${block.mCol ? (block.span || '1x1').split('x')[0] : 48}x${(block.span || '1x1').split('x')[1] || 8}`).split('x').map((n: string) => parseInt(n) || 1);
+  const [tSpanW, tSpanH] = (block.tSpan || block.span || '1x1').split('x').map((n: string) => parseInt(n) || 1);
   const baseImages = block.gallery && block.gallery.length > 0 ? block.gallery : [block.image].filter(Boolean);
   // En modo 'peek', la galería tiene prioridad: el localStorage override es una sola imagen
   // y rompería el carrusel. Solo se aplica el override en modos de slideshow normales.
@@ -147,7 +153,7 @@ const BentoBlock = ({ block, designMode, assets, handleDrop, entryIndex, onClick
         '--t-row': block.tRow ?? block.row ?? 1,
         '--t-span-w': tSpanW,
         '--t-span-h': tSpanH,
-        '--m-col': block.mCol ?? block.col ?? 1,
+        '--m-col': block.mCol ?? 1,
         '--m-row': block.mRow ?? block.row ?? 1,
         '--m-span-w': mSpanW,
         '--m-span-h': mSpanH,
@@ -826,15 +832,18 @@ export default function Home() {
         )}
 
         {/* --- AQUÍ EMPIEZA EL LIENZO INFINITO --- */}
-        {hasBlocks && (masterSection.title1 || masterSection.paragraph1) && (
-          <div style={{ padding: '100px 60px 60px 60px', width: '100%', maxWidth: '1400px', margin: '0 auto' }}>
+        {hasBlocks && (masterSection?.title1?.trim() || masterSection?.paragraph1?.trim()) && (
+          <div className="section-header-wrap" style={{ 
+            padding: previewMode === 'mobile' ? '60px 20px 40px 20px' : '100px 60px 60px 60px', 
+            width: '100%', maxWidth: '1400px', margin: '0 auto' 
+          }}>
             <motion.div
               initial={{ opacity: 0, y: 30 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.8 }}
             >
-              {masterSection.title1 && (
+              {masterSection.title1?.trim() && (
                 <h2 style={{ 
                   fontSize: 'clamp(3rem, 6vw, 5rem)', 
                   fontFamily: 'var(--eco-font-display)', 
@@ -863,7 +872,7 @@ export default function Home() {
                   />
                 </h2>
               )}
-              {masterSection.paragraph1 && (
+              {masterSection.paragraph1?.trim() && (
                 <p style={{ 
                   fontSize: '1.2rem', 
                   fontFamily: 'var(--eco-font-heading)', 
