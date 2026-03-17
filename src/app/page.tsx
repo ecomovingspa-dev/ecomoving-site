@@ -26,19 +26,38 @@ interface Project {
   status: 'online' | 'ready';
 }
 
-const BentoBlock = ({ block, designMode, assets, handleDrop, entryIndex, onClick, isSelected }: {
+const BentoBlock = ({ block, designMode, assets, handleDrop, entryIndex, onClick, isSelected, previewMode }: {
   block: any,
   designMode: boolean,
   assets: any,
   handleDrop: (e: React.DragEvent, id: string) => void,
   entryIndex: number,
   onClick?: () => void,
-  isSelected?: boolean
+  isSelected?: boolean,
+  previewMode?: string
 }) => {
+  const currentMode = previewMode || 'desktop';
+  let finalCol = block.col || 1;
+  let finalRow = block.row || 1;
+  let finalSpan = block.span || '1x1';
+
+  if (currentMode === 'tablet' && block.tCol !== undefined) {
+    finalCol = block.tCol;
+    finalRow = block.tRow;
+    finalSpan = block.tSpan || finalSpan;
+  } else if (currentMode === 'mobile' && block.mCol !== undefined) {
+    finalCol = block.mCol;
+    finalRow = block.mRow;
+    finalSpan = block.mSpan || finalSpan;
+  }
+
   const cardRef = React.useRef<HTMLDivElement>(null);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [isHovered, setIsHovered] = useState(false);
+
+  const [tSpanW, tSpanH] = (block.tSpan || block.span || '1x1').split('x').map((n: string) => parseInt(n) || 1);
+  const [mSpanW, mSpanH] = (block.mSpan || block.span || '1x1').split('x').map((n: string) => parseInt(n) || 1);
   // ── PRIORIDAD: override manual (drag) > gallery del bloque > imagen del bloque ──
   const baseImages = block.gallery && block.gallery.length > 0 ? block.gallery : [block.image].filter(Boolean);
   // En modo 'peek', la galería tiene prioridad: el localStorage override es una sola imagen
@@ -51,7 +70,7 @@ const BentoBlock = ({ block, designMode, assets, handleDrop, entryIndex, onClick
   if (images.length === 0) {
       images = designMode ? [] : [];
   }
-  const [spanW, spanH] = (block.span || '4x1').split('x').map((n: string) => parseInt(n) || 1);
+  const [spanW, spanH] = finalSpan.split('x').map((n: string) => parseInt(n) || 1);
   const isText = block.type === 'text' || block.type === 'both';
   const isImage = block.type === 'image' || block.type === 'both' || !block.type;
 
@@ -117,8 +136,21 @@ const BentoBlock = ({ block, designMode, assets, handleDrop, entryIndex, onClick
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       style={{
-        gridColumn: `${block.col} / span ${spanW}`,
-        gridRow: `${block.row} / span ${spanH}`,
+        gridColumn: `var(--final-col) / span var(--final-span-w)`,
+        gridRow: `var(--final-row) / span var(--final-span-h)`,
+        // CSS Variables for responsive power
+        '--final-col': finalCol,
+        '--final-row': finalRow,
+        '--final-span-w': spanW,
+        '--final-span-h': spanH,
+        '--t-col': block.tCol ?? block.col ?? 1,
+        '--t-row': block.tRow ?? block.row ?? 1,
+        '--t-span-w': tSpanW,
+        '--t-span-h': tSpanH,
+        '--m-col': block.mCol ?? block.col ?? 1,
+        '--m-row': block.mRow ?? block.row ?? 1,
+        '--m-span-w': mSpanW,
+        '--m-span-h': mSpanH,
         zIndex: block.zIndex || 1,
         position: 'relative',
         background: block.gradient
@@ -341,14 +373,26 @@ export default function Home() {
   const handleBlockUpdate = useCallback((blockId: string, updates: Partial<any>) => {
     const source = previewSections || content?.sections;
     if (!Array.isArray(source)) return;
+
+    // ── RESPONSIVE MAPPER ──
+    const mappedUpdates: any = { ...updates };
+    if (previewMode === 'tablet') {
+      if ('col' in updates) { mappedUpdates.tCol = updates.col; delete mappedUpdates.col; }
+      if ('row' in updates) { mappedUpdates.tRow = updates.row; delete mappedUpdates.row; }
+      if ('span' in updates) { mappedUpdates.tSpan = updates.span; delete mappedUpdates.span; }
+    } else if (previewMode === 'mobile') {
+      if ('col' in updates) { mappedUpdates.mCol = updates.col; delete mappedUpdates.col; }
+      if ('row' in updates) { mappedUpdates.mRow = updates.row; delete mappedUpdates.row; }
+      if ('span' in updates) { mappedUpdates.mSpan = updates.span; delete mappedUpdates.span; }
+    }
+
     const newSections = source.map((s: any) => {
       if (!s.blocks) return s;
-      return { ...s, blocks: s.blocks.map((b: any) => b.id === blockId ? { ...b, ...updates } : b) };
+      return { ...s, blocks: s.blocks.map((b: any) => b.id === blockId ? { ...b, ...mappedUpdates } : b) };
     });
     setPreviewSections(newSections);
-    // Guarda con debounce implícito (lo maneja el Inspector)
     updateSection('sections', newSections);
-  }, [previewSections, content, updateSection]);
+  }, [previewSections, content, updateSection, previewMode]);
 
   const handleBlockDelete = useCallback((blockId: string) => {
     const source = previewSections || content?.sections;
@@ -763,6 +807,7 @@ export default function Home() {
               assets={assets}
               entryIndex={idx}
               isSelected={selectedBlockId === block.id}
+              previewMode={previewMode}
               onClick={() => setSelectedBlockId(selectedBlockId === block.id ? null : block.id)}
               handleDrop={(e: any) => handleDrop(e, block.id)}
             />
@@ -822,9 +867,24 @@ export default function Home() {
             : null;
           const allBlocks: any[] = ms?.blocks || [];
           const inspectedBlock = selectedBlockId ? (allBlocks.find((b: any) => b.id === selectedBlockId) || null) : null;
+          
+          // Mapear coordenadas actuales para el Inspector si estamos en responsive
+          let mappedBlock = inspectedBlock ? { ...inspectedBlock } : null;
+          if (mappedBlock) {
+             if (previewMode === 'tablet' && mappedBlock.tCol !== undefined) {
+               mappedBlock.col = mappedBlock.tCol;
+               mappedBlock.row = mappedBlock.tRow;
+               mappedBlock.span = mappedBlock.tSpan || mappedBlock.span;
+             } else if (previewMode === 'mobile' && mappedBlock.mCol !== undefined) {
+               mappedBlock.col = mappedBlock.mCol;
+               mappedBlock.row = mappedBlock.mRow;
+               mappedBlock.span = mappedBlock.mSpan || mappedBlock.span;
+             }
+          }
+
           return (
             <BlockInspector
-              block={inspectedBlock}
+              block={mappedBlock}
               allBlocks={allBlocks}
               canvasBgColor={ms?.bgColor || '#000000'}
               onClose={() => setDesignMode(false)}
@@ -891,6 +951,38 @@ export default function Home() {
         @media (min-width: 769px) and (max-width: 1024px) {
            .hero-premium { padding: 120px 40px !important; }
            .hero-premium h1 { font-size: 4rem !important; }
+        }
+
+        /* RESPONSIVE INDEPENDENCE ENGINE (Auto-switch in public site) */
+        @media (min-width: 769px) and (max-width: 1024px) {
+           main:not(.design-mode) .bento-block-mobile { 
+              --final-col: var(--t-col) !important;
+              --final-row: var(--t-row) !important;
+              --final-span-w: var(--t-span-w) !important;
+              --final-span-h: var(--t-span-h) !important;
+           }
+        }
+        @media (max-width: 768px) {
+           main:not(.design-mode) .bento-block-mobile { 
+              --final-col: var(--m-col) !important;
+              --final-row: var(--m-row) !important;
+              --final-span-w: var(--m-span-w) !important;
+              --final-span-h: var(--m-span-h) !important;
+           }
+        }
+
+        /* Simulator Sync */
+        .device-preview-wrapper.tablet:not(.design-active) .bento-block-mobile {
+              --final-col: var(--t-col) !important;
+              --final-row: var(--t-row) !important;
+              --final-span-w: var(--t-span-w) !important;
+              --final-span-h: var(--t-span-h) !important;
+        }
+        .device-preview-wrapper.mobile:not(.design-active) .bento-block-mobile {
+              --final-col: var(--m-col) !important;
+              --final-row: var(--m-row) !important;
+              --final-span-w: var(--m-span-w) !important;
+              --final-span-h: var(--m-span-h) !important;
         }
       `}</style>
     </main>
