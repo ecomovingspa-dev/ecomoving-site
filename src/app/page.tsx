@@ -899,34 +899,15 @@ export default function Home() {
              aspect-ratio: var(--mobile-aspect) !important;
         }
 
-        /* Simulator Tablet: Only stack if NOT in design mode */
-        .device-preview-wrapper.tablet:not(.design-active) .hero-premium { padding: 120px 40px !important; }
-        .device-preview-wrapper.tablet:not(.design-active) .hero-premium h1 { font-size: 4rem !important; }
-        .device-preview-wrapper.tablet:not(.design-active) .responsive-grid { 
-           display: grid !important; 
-           grid-template-columns: repeat(2, 1fr) !important; 
-           gap: 20px !important; 
-        }
-        .device-preview-wrapper.tablet:not(.design-active) .bento-block-mobile { 
-           grid-column: unset !important; 
-           grid-row: unset !important;
-           aspect-ratio: var(--mobile-aspect) !important;
-        }
+        /* Simulator Tablet: Preserve the Grid in Tablet View */
+        .device-preview-wrapper.tablet .hero-premium { padding: 120px 40px !important; }
+        .device-preview-wrapper.tablet .hero-premium h1 { font-size: 4rem !important; }
+        /* No longer unsetting grid for tablet, so design stays in place */
 
-        /* Real Tablet: Only stack if NOT in design mode */
+        /* Real Tablet: Preserve the Grid */
         @media (min-width: 769px) and (max-width: 1024px) {
-           main:not(.design-mode) .hero-premium { padding: 120px 40px !important; }
-           main:not(.design-mode) h1 { font-size: 4rem !important; }
-           main:not(.design-mode) .responsive-grid { 
-              display: grid !important; 
-              grid-template-columns: repeat(2, 1fr) !important; 
-              gap: 20px !important; 
-           }
-           main:not(.design-mode) .bento-block-mobile { 
-              grid-column: unset !important; 
-              grid-row: unset !important; 
-              aspect-ratio: var(--mobile-aspect) !important; 
-           }
+           .hero-premium { padding: 120px 40px !important; }
+           .hero-premium h1 { font-size: 4rem !important; }
         }
       `}</style>
     </main>
