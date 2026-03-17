@@ -53,8 +53,8 @@ export default function SectionComposer({ isOpen, onClose, content, onSave, onCh
                 const newMaster: DynamicSection = {
                     id: 'infinite_grid',
                     order: 1,
-                    title1: 'LIENZO INFINITO',
-                    paragraph1: 'Grid maestra de 48 columnas.',
+                    title1: '',
+                    paragraph1: '',
                     bgColor: '#0a0a0a',
                     blocks: []
                 };
@@ -417,6 +417,29 @@ export default function SectionComposer({ isOpen, onClose, content, onSave, onCh
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                     <Sparkles size={16} style={{ color: 'var(--eco-accent-primary)' }} />
                                     <span style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--eco-accent-primary)', letterSpacing: '2px', textTransform: 'uppercase' }}>CONFIGURACIÓN DEL LIENZO</span>
+                                </div>
+
+                                <div style={{ display: 'flex', gap: '15px', flex: 1 }}>
+                                    <div style={{ flex: 1 }}>
+                                        <label style={{ display: 'block', fontSize: '9px', color: '#555', marginBottom: '4px', fontWeight: 'bold' }}>TÍTULO DE SECCIÓN</label>
+                                        <input 
+                                            type="text" 
+                                            value={section.title1 || ''} 
+                                            onChange={(e) => setSections(sections.map(s => s.id === section.id ? { ...s, title1: e.target.value } : s))}
+                                            placeholder="Título (Lienzo Infinito)"
+                                            style={{ width: '100%', background: '#000', border: '1px solid #222', color: '#00d4bd', fontSize: '11px', padding: '8px', borderRadius: '6px' }}
+                                        />
+                                    </div>
+                                    <div style={{ flex: 2 }}>
+                                        <label style={{ display: 'block', fontSize: '9px', color: '#555', marginBottom: '4px', fontWeight: 'bold' }}>SUBTÍTULO / DESCRIPCIÓN</label>
+                                        <input 
+                                            type="text" 
+                                            value={section.paragraph1 || ''} 
+                                            onChange={(e) => setSections(sections.map(s => s.id === section.id ? { ...s, paragraph1: e.target.value } : s))}
+                                            placeholder="Descripción (Grid maestra...)"
+                                            style={{ width: '100%', background: '#000', border: '1px solid #222', color: '#888', fontSize: '11px', padding: '8px', borderRadius: '6px' }}
+                                        />
+                                    </div>
                                 </div>
 
                                 <div style={{ width: '1px', height: '20px', backgroundColor: '#333', margin: '0 10px' }} />

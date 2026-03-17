@@ -826,6 +826,58 @@ export default function Home() {
         )}
 
         {/* --- AQUÍ EMPIEZA EL LIENZO INFINITO --- */}
+        {hasBlocks && (masterSection.title1 || masterSection.paragraph1) && (
+          <div style={{ padding: '100px 60px 60px 60px', width: '100%', maxWidth: '1400px', margin: '0 auto' }}>
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.8 }}
+            >
+              {masterSection.title1 && (
+                <h2 style={{ 
+                  fontSize: 'clamp(3rem, 6vw, 5rem)', 
+                  fontFamily: 'var(--eco-font-display)', 
+                  letterSpacing: '6px',
+                  marginBottom: '15px',
+                  color: 'white',
+                  position: 'relative',
+                  display: 'inline-block',
+                  textTransform: 'uppercase'
+                }}>
+                  {masterSection.title1}
+                  <motion.div 
+                    initial={{ width: 0 }}
+                    whileInView={{ width: '100%' }}
+                    viewport={{ once: true }}
+                    transition={{ delay: 0.6, duration: 1.2, ease: "circOut" }}
+                    style={{ 
+                      position: 'absolute', 
+                      bottom: '-8px', 
+                      left: 0, 
+                      height: '4px', 
+                      background: 'var(--eco-accent-gradient)',
+                      borderRadius: '2px',
+                      boxShadow: '0 0 15px rgba(0, 229, 160, 0.4)'
+                    }}
+                  />
+                </h2>
+              )}
+              {masterSection.paragraph1 && (
+                <p style={{ 
+                  fontSize: '1.2rem', 
+                  fontFamily: 'var(--eco-font-heading)', 
+                  color: 'rgba(255,255,255,0.5)',
+                  marginTop: '25px',
+                  letterSpacing: '2px',
+                  fontWeight: 300
+                }}>
+                  {masterSection.paragraph1}
+                </p>
+              )}
+            </motion.div>
+          </div>
+        )}
         <div className="responsive-grid" style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(48, 1fr)',
