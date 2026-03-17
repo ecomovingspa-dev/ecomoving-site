@@ -869,35 +869,18 @@ export default function Home() {
           }
         }
         
-        /* Mobile Breakpoint: Only stack if NOT in design mode */
+        /* Mobile Breakpoint: Only padding and font changes */
         @media (max-width: 768px) {
-           main:not(.design-mode) .hero-premium { padding: 120px 20px !important; }
-           main:not(.design-mode) h1 { font-size: 3rem !important; }
-           main:not(.design-mode) p { font-size: 1.1rem !important; }
-           main:not(.design-mode) .responsive-grid { display: flex !important; flex-direction: column !important; gap: 20px !important; }
-           main:not(.design-mode) .bento-block-mobile { 
-             grid-column: unset !important; 
-             grid-row: unset !important; 
-             width: 100% !important; 
-             height: auto !important; 
-             min-height: 150px !important; 
-             aspect-ratio: var(--mobile-aspect) !important; 
-           }
+           .hero-premium { padding: 120px 20px !important; }
+           .hero-premium h1 { font-size: 3rem !important; }
+           .hero-premium p { font-size: 1.1rem !important; }
         }
 
-        /* Simulator Mobile: Only stack if NOT in design mode */
-        .device-preview-wrapper.mobile:not(.design-active) .hero-premium { padding: 120px 20px !important; }
-        .device-preview-wrapper.mobile:not(.design-active) .hero-premium h1 { font-size: 3rem !important; }
-        .device-preview-wrapper.mobile:not(.design-active) .hero-premium p { font-size: 1.1rem !important; }
-        .device-preview-wrapper.mobile:not(.design-active) .responsive-grid { display: flex !important; flex-direction: column !important; gap: 20px !important; }
-        .device-preview-wrapper.mobile:not(.design-active) .bento-block-mobile { 
-             grid-column: unset !important; 
-             grid-row: unset !important; 
-             width: 100% !important; 
-             height: auto !important;
-             min-height: 150px !important; 
-             aspect-ratio: var(--mobile-aspect) !important;
-        }
+        /* Simulator Mobile: Preserve the Grid for Design */
+        .device-preview-wrapper.mobile .hero-premium { padding: 80px 20px !important; }
+        .device-preview-wrapper.mobile .hero-premium h1 { font-size: 2.22rem !important; }
+        .device-preview-wrapper.mobile .hero-premium p { font-size: 1rem !important; }
+        /* Grid is preserved as in Tablet, allowing precise editing */
 
         /* Simulator Tablet: Preserve the Grid in Tablet View */
         .device-preview-wrapper.tablet .hero-premium { padding: 120px 40px !important; }
