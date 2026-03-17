@@ -443,6 +443,13 @@ export default function Home() {
       span: '24x20', 
       col: 1, 
       row: nextRow,
+      // INDEPENDENCIA AUTOMÁTICA DESDE EL INICIO
+      tCol: 1,
+      tRow: nextRow,
+      tSpan: '48x20', // Tablet default span (full width usually better)
+      mCol: 1,
+      mRow: nextRow,
+      mSpan: '48x15', // Mobile default span
       zIndex: 1, 
       opacity: 1, 
       borderRadius: '24px', 
