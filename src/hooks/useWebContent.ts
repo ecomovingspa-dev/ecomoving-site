@@ -74,6 +74,7 @@ export interface LayoutBlock {
     link?: string; // Enlace asociado al bloque (generado por la IA al buscar un SKU)
     buttonText?: string;
     buttonSku?: string;
+    textProtection?: boolean;
 }
 
 export interface DynamicSection {

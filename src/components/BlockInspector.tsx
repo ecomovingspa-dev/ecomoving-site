@@ -589,6 +589,17 @@ export default function BlockInspector({
                                                 <option value="50px">Extra (50px)</option>
                                             </select>
                                         </div>
+                                        <div style={{ gridColumn: 'span 2', marginTop: '10px', padding: '12px', background: 'rgba(0,212,189,0.03)', borderRadius: '8px', border: '1px solid rgba(0,212,189,0.1)' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }} onClick={() => update({ textProtection: !block.textProtection })}>
+                                                <div style={{ width: '18px', height: '18px', border: '1px solid #00d4bd', borderRadius: '4px', background: block.textProtection ? '#00d4bd' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.3s' }}>
+                                                    {block.textProtection && <div style={{ width: '8px', height: '8px', background: '#000', borderRadius: '1px' }} />}
+                                                </div>
+                                                <div>
+                                                    <div style={{ fontSize: '11px', fontWeight: 900, color: '#00d4bd', letterSpacing: '1px' }}>🛡️ PROTECCIÓN DE TEXTO</div>
+                                                    <div style={{ fontSize: '8px', color: '#555', marginTop: '2px' }}>Asegura legibilidad en fondos claros.</div>
+                                                </div>
+                                            </div>
+                                        </div>
                                         <div style={{ gridColumn: 'span 2' }}>
                                             <div style={labelStyle}>ALINEACIÓN VERTICAL (ALTURA)</div>
                                             <div style={{ display: 'flex', gap: '3px' }}>

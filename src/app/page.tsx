@@ -259,7 +259,14 @@ const BentoBlock = ({ block, designMode, assets, handleDrop, entryIndex, onClick
           zIndex: 20, pointerEvents: 'none',
           display: 'flex', flexDirection: 'column',
           alignItems: block.textAlign === 'center' ? 'center' : (block.textAlign === 'right' ? 'flex-end' : 'flex-start'),
-          justifyContent: block.textVerticalAlign || 'flex-start'
+          justifyContent: block.textVerticalAlign || 'flex-start',
+          ...(block.textProtection && {
+            background: block.textAlign === 'center' 
+               ? 'radial-gradient(circle at center, rgba(0,0,0,0.45) 0%, transparent 80%)' 
+               : `linear-gradient(${block.textAlign === 'right' ? 'to left' : 'to right'}, rgba(0,0,0,0.5) 0%, transparent 90%)`,
+            borderRadius: '20px',
+            padding: '20px'
+          })
         }}>
           {block.blockTitle && (
             <h2 style={{
@@ -271,7 +278,9 @@ const BentoBlock = ({ block, designMode, assets, handleDrop, entryIndex, onClick
               textTransform: block.textTransform || 'none',
               letterSpacing: block.letterSpacing || 'normal',
               fontFamily: 'var(--eco-font-display)',
-              textShadow: '0 4px 20px rgba(0,0,0,0.6)',
+              textShadow: block.textProtection 
+                ? '0 0 20px rgba(0,0,0,0.9), 0 2px 4px rgba(0,0,0,0.8)' 
+                : '0 4px 20px rgba(0,0,0,0.6)',
               lineHeight: block.titleLineHeight || 1.1,
               maxWidth: block.textMaxWidth || '90%'
             }}>
@@ -290,7 +299,9 @@ const BentoBlock = ({ block, designMode, assets, handleDrop, entryIndex, onClick
               lineHeight: block.lineHeight || '1.5',
               fontStyle: block.fontStyle || 'normal',
               maxWidth: block.textMaxWidth || '600px',
-              textShadow: '0 2px 10px rgba(0,0,0,0.8)'
+              textShadow: block.textProtection 
+                ? '0 0 10px rgba(0,0,0,0.9), 0 1px 2px rgba(0,0,0,0.9)' 
+                : '0 2px 10px rgba(0,0,0,0.8)'
             }}>
               {block.blockParagraph}
             </p>
