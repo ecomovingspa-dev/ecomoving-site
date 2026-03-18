@@ -372,6 +372,23 @@ export default function Home() {
 
   const [previewSections, setPreviewSections] = useState<DynamicSection[] | null>(null);
 
+  const [isProduction, setIsProduction] = useState(false);
+  const [isAdminBypass, setIsAdminBypass] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const hostname = window.location.hostname;
+      const isProd = hostname.includes('ecomoving.cl') || hostname.includes('vercel.app');
+      const bypass = window.location.search.includes('admin=true') || window.location.search.includes('design=true');
+      setIsProduction(isProd);
+      setIsAdminBypass(bypass);
+
+      if (isProd && !bypass) {
+        setSelectedProject({ id: 'prod', name: 'Ecomoving | Sitio Público', repo: '', path: '', lastExport: '', type: 'public', status: 'online' });
+      }
+    }
+  }, []);
+
   // Asset State
   const [assets, setAssets] = useState<Record<string, string>>({
     hero: '',
@@ -628,9 +645,12 @@ export default function Home() {
 
   if (contentLoading) return <div className='loading-screen'>ECOMOVING SPA</div>;
 
-  if (!selectedProject) {
+ 
+  if (!selectedProject && !isProduction) {
     return <ProjectLauncher onSelect={(p) => setSelectedProject(p)} />;
   }
+
+  const showAdminUI = !isProduction || isAdminBypass;
 
   // 1. Buscar la sección maestra (Soporte Live Preview)
   const source = previewSections || content?.sections;
@@ -660,52 +680,55 @@ export default function Home() {
         }}
       />
 
-      {/* --- NAV MASTER --- */}
-      <nav className='nav-master'>
-        <div className='logo-brand'>
-          <img src="https://xgdmyjzyejjmwdqkufhp.supabase.co/storage/v1/object/public/logo_ecomoving/Logo_horizontal.png" alt="Ecomoving Logo" className="logo-img" />
-        </div>
-        <div className='nav-actions' style={{ display: 'flex', gap: '10px' }}>
-          <button onClick={() => setSelectedProject(null)} className='nav-btn' style={{ background: 'rgba(255,100,100,0.1)', color: '#ff6b6b' }}><Rocket size={16} /> SALIR</button>
+ 
+      {/* --- NAV MASTER (Solo Admin) --- */}
+      {showAdminUI && (
+        <nav className='nav-master'>
+          <div className='logo-brand'>
+            <img src="https://xgdmyjzyejjmwdqkufhp.supabase.co/storage/v1/object/public/logo_ecomoving/Logo_horizontal.png" alt="Ecomoving Logo" className="logo-img" />
+          </div>
+          <div className='nav-actions' style={{ display: 'flex', gap: '10px' }}>
+            <button onClick={() => setSelectedProject(null)} className='nav-btn' style={{ background: 'rgba(255,100,100,0.1)', color: '#ff6b6b' }}><Rocket size={16} /> SALIR</button>
 
-          <button
-            onClick={handleDeploy}
-            className='nav-btn'
-            style={{ background: isDeploying ? 'rgba(0, 212, 189, 0.2)' : 'rgba(255,255,255,0.05)', color: isDeploying ? '#00d4bd' : '#aaa', borderColor: isDeploying ? '#00d4bd' : 'rgba(255,255,255,0.1)' }}
-            disabled={isDeploying}
-          >
-            <CloudUpload size={16} className={isDeploying ? 'animate-bounce' : ''} />
-            {isDeploying ? 'ENVIANDO...' : 'PUBLISH'}
-          </button>
+            <button
+              onClick={handleDeploy}
+              className='nav-btn'
+              style={{ background: isDeploying ? 'rgba(0, 212, 189, 0.2)' : 'rgba(255,255,255,0.05)', color: isDeploying ? '#00d4bd' : '#aaa', borderColor: isDeploying ? '#00d4bd' : 'rgba(255,255,255,0.1)' }}
+              disabled={isDeploying}
+            >
+              <CloudUpload size={16} className={isDeploying ? 'animate-bounce' : ''} />
+              {isDeploying ? 'ENVIANDO...' : 'PUBLISH'}
+            </button>
 
-          <button onClick={() => setIsCatalogHubOpen(true)} className='nav-btn'><Layout size={16} /> HUB</button>
-          <button onClick={() => setIsBibliotecaOpen(true)} className='nav-btn'><ImageIcon size={16} /> BIBLIOTECA</button>
-          <button onClick={() => setIsEditorSEOOpen(true)} className='nav-btn'><FileText size={16} /> SEO</button>
-          
-          {/* SIMULADOR DISPOSITIVOS */}
-          <div style={{ display: 'flex', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.1)', overflow: 'hidden', marginLeft: '10px' }}>
-            <button onClick={() => setPreviewMode('desktop')} className='nav-btn' style={{ border: 'none', borderRadius: 0, backgroundColor: previewMode === 'desktop' ? 'rgba(0,212,189,0.2)' : 'transparent', color: previewMode === 'desktop' ? '#00d4bd' : '#aaa' }} title="Desktop View">
-              <Monitor size={16} />
-            </button>
-            <button onClick={() => setPreviewMode('tablet')} className='nav-btn' style={{ border: 'none', borderLeft: '1px solid rgba(255,255,255,0.1)', borderRadius: 0, backgroundColor: previewMode === 'tablet' ? 'rgba(0,212,189,0.2)' : 'transparent', color: previewMode === 'tablet' ? '#00d4bd' : '#aaa' }} title="Tablet View">
-              <Tablet size={16} />
-            </button>
-            <button onClick={() => setPreviewMode('mobile')} className='nav-btn' style={{ border: 'none', borderLeft: '1px solid rgba(255,255,255,0.1)', borderRadius: 0, backgroundColor: previewMode === 'mobile' ? 'rgba(0,212,189,0.2)' : 'transparent', color: previewMode === 'mobile' ? '#00d4bd' : '#aaa' }} title="Mobile View">
-              <Smartphone size={16} />
+            <button onClick={() => setIsCatalogHubOpen(true)} className='nav-btn'><Layout size={16} /> HUB</button>
+            <button onClick={() => setIsBibliotecaOpen(true)} className='nav-btn'><ImageIcon size={16} /> BIBLIOTECA</button>
+            <button onClick={() => setIsEditorSEOOpen(true)} className='nav-btn'><FileText size={16} /> SEO</button>
+            
+            {/* SIMULADOR DISPOSITIVOS */}
+            <div style={{ display: 'flex', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.1)', overflow: 'hidden', marginLeft: '10px' }}>
+              <button onClick={() => setPreviewMode('desktop')} className='nav-btn' style={{ border: 'none', borderRadius: 0, backgroundColor: previewMode === 'desktop' ? 'rgba(0,212,189,0.2)' : 'transparent', color: previewMode === 'desktop' ? '#00d4bd' : '#aaa' }} title="Desktop View">
+                <Monitor size={16} />
+              </button>
+              <button onClick={() => setPreviewMode('tablet')} className='nav-btn' style={{ border: 'none', borderLeft: '1px solid rgba(255,255,255,0.1)', borderRadius: 0, backgroundColor: previewMode === 'tablet' ? 'rgba(0,212,189,0.2)' : 'transparent', color: previewMode === 'tablet' ? '#00d4bd' : '#aaa' }} title="Tablet View">
+                <Tablet size={16} />
+              </button>
+              <button onClick={() => setPreviewMode('mobile')} className='nav-btn' style={{ border: 'none', borderLeft: '1px solid rgba(255,255,255,0.1)', borderRadius: 0, backgroundColor: previewMode === 'mobile' ? 'rgba(0,212,189,0.2)' : 'transparent', color: previewMode === 'mobile' ? '#00d4bd' : '#aaa' }} title="Mobile View">
+                <Smartphone size={16} />
+              </button>
+            </div>
+
+            {selectedProject?.type === 'public' && (
+              <button onClick={() => setIsExportModalOpen(true)} className='nav-btn' style={{ background: 'var(--accent-gold)11', color: 'var(--accent-gold)', borderColor: 'var(--accent-gold)33', marginLeft: '10px' }}><Send size={16} /> EXPORTAR</button>
+            )}
+            <button onClick={() => { setDesignMode(!designMode); setSelectedBlockId(null); }} className='nav-btn'
+              style={designMode ? { background: 'rgba(0,212,189,0.15)', color: '#00d4bd', borderColor: 'rgba(0,212,189,0.5)', marginLeft: '10px' } : { marginLeft: '10px' }}>
+              <Crop size={16} /> {designMode ? '● DISEÑO' : 'DISEÑO'}
             </button>
           </div>
+        </nav>
+      )}
 
-          {selectedProject.type === 'public' && (
-            <button onClick={() => setIsExportModalOpen(true)} className='nav-btn' style={{ background: 'var(--accent-gold)11', color: 'var(--accent-gold)', borderColor: 'var(--accent-gold)33', marginLeft: '10px' }}><Send size={16} /> EXPORTAR</button>
-          )}
-          <button onClick={() => { setDesignMode(!designMode); setSelectedBlockId(null); }} className='nav-btn'
-            style={designMode ? { background: 'rgba(0,212,189,0.15)', color: '#00d4bd', borderColor: 'rgba(0,212,189,0.5)', marginLeft: '10px' } : { marginLeft: '10px' }}>
-            <Crop size={16} /> {designMode ? '● DISEÑO' : 'DISEÑO'}
-          </button>
-        </div>
-      </nav>
-
-      <div style={{ padding: '80px 0 0 0', minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', backgroundColor: previewMode !== 'desktop' ? '#111' : 'transparent' }}>
+      <div style={{ padding: showAdminUI ? '80px 0 0 0' : '0', minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', backgroundColor: previewMode !== 'desktop' ? '#111' : 'transparent' }}>
         <div 
           className={`device-preview-wrapper ${previewMode} ${designMode ? 'design-active' : ''}`}
           style={{
@@ -961,7 +984,7 @@ export default function Home() {
       <ExportModal
         isOpen={isExportModalOpen}
         onClose={() => setIsExportModalOpen(false)}
-        project={selectedProject}
+        project={selectedProject as any}
       />
 
       {/* ── INSPECTOR ÚNICO — siempre visible en design mode ── */}
