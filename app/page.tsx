@@ -316,7 +316,7 @@ export default function Home() {
             initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 1 }}
-            style={{ fontSize: 'min(5rem, 10vw)', fontFamily: 'var(--font-heading)', lineHeight: 1.1, marginBottom: '20px', textTransform: 'uppercase' }}
+            style={{ fontSize: 'clamp(3rem, 10vw, 6rem)', fontFamily: 'var(--font-heading)', lineHeight: 1.1, marginBottom: '20px', textTransform: 'uppercase', textShadow: '0 4px 20px rgba(0,0,0,0.8)' }}
           >
             {content.hero.title || content.hero.title1}
           </motion.h1>
@@ -325,7 +325,7 @@ export default function Home() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 1, delay: 0.5 }}
-            style={{ fontSize: '1.5rem', color: '#888', marginBottom: '40px', letterSpacing: '2px', maxWidth: '800px', marginInline: 'auto' }}
+            style={{ fontSize: 'clamp(1.1rem, 3vw, 1.5rem)', color: '#bbb', marginBottom: '40px', letterSpacing: '2px', maxWidth: '800px', marginInline: 'auto', textShadow: '0 2px 10px rgba(0,0,0,0.9)', lineHeight: 1.4 }}
           >
             {content.hero.paragraph1}
           </motion.p>
@@ -335,13 +335,15 @@ export default function Home() {
               className='cta-luxury'
               style={{
                 display: 'inline-block',
-                padding: '18px 50px',
-                background: '#00d4bd',
+                padding: '16px 45px',
+                background: 'var(--accent-turquoise)',
                 color: '#000',
-                fontWeight: 900,
-                borderRadius: '50px',
+                fontWeight: 800,
+                borderRadius: '4px',
                 letterSpacing: '2px',
+                textTransform: 'uppercase',
                 textDecoration: 'none',
+                boxShadow: '0 4px 15px rgba(0,212,189,0.3)',
                 transition: '0.3s'
               }}
             >

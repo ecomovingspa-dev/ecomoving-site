@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Montserrat:wght@300;400;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap');
 
 * {
   box-sizing: border-box;
@@ -6,14 +6,13 @@
 
 :root {
   --bg-color: #0a0a0a;
-  --text-main: #e0e0e0;
+  --text-main: #FFFFFF;
   --text-muted: #888888;
-  --accent-gold: #D4AF37;
+  --accent-gold: #00E5A0; /* Emerald de la marca */
   --accent-turquoise: #00d4bd;
-  /* Nuevo Turquesa Vibrante */
-  /* Toque dorado premium */
-  --font-heading: 'Cinzel', serif;
-  --font-body: 'Montserrat', sans-serif;
+  --font-heading: 'Space Grotesk', sans-serif;
+  --font-body: 'DM Sans', sans-serif;
+  --font-display: 'Bebas Neue', sans-serif;
 }
 
 html {
@@ -58,7 +57,7 @@ body {
 /* --- Utilities --- */
 .container {
   width: 100%;
-  max-width: 100%;
+  max-width: 1440px;
   margin: 0 auto;
   padding: 0 60px;
 }
