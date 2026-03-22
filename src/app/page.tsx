@@ -345,7 +345,7 @@ export default function Home() {
             gridTemplateColumns: 'repeat(48, 1fr)',
             gridAutoRows: 'minmax(20px, auto)',
             gap: '20px',
-            maxWidth: '1440px',
+            maxWidth: '2400px',
             margin: '0 auto'
           }}
         >
