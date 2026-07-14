@@ -2,7 +2,7 @@
   "hero": {
     "title1": "Elegancia sostenible para la alta dirección.",
     "paragraph1": "Sets corporativos ecológicos que fusionan diseño minimalista con el máximo prestigio empresarial.",
-    "background_image": "https://xgdmyjzyejjmwdqkufhp.supabase.co/storage/v1/object/public/imagenes-marketing/hero/INSUMO-1783283299117-0.webp",
+    "background_image": "https://xgdmyjzyejjmwdqkufhp.supabase.co/storage/v1/object/public/imagenes-marketing/hero/INSUMO-1783658562515-0.webp",
     "cta_text": "VER PRODUCTOS",
     "cta_link": "/catalogo",
     "span": "48x58",
@@ -10,7 +10,8 @@
     "row": 1,
     "text_align_h": "left",
     "text_align_v": "top",
-    "background_image_2": "https://xgdmyjzyejjmwdqkufhp.supabase.co/storage/v1/object/public/imagenes-marketing/hero/INSUMO-1783285673876-0.webp"
+    "background_image_2": "https://xgdmyjzyejjmwdqkufhp.supabase.co/storage/v1/object/public/imagenes-marketing/hero/INSUMO-1783285673876-0.webp",
+    "background_image_3": "https://xgdmyjzyejjmwdqkufhp.supabase.co/storage/v1/object/public/imagenes-marketing/hero/INSUMO-1783658898994-0.webp"
   },
   "sections": [
     {
@@ -71,7 +72,7 @@
           "id": "block_1783207834308",
           "label": "NUEVO BLOQUE",
           "type": "image",
-          "span": "24x30",
+          "span": "24x28",
           "col": 25,
           "row": 4,
           "tCol": 1,
@@ -100,9 +101,9 @@
           "id": "block_1783208792196",
           "label": "NUEVO BLOQUE",
           "type": "image",
-          "span": "30x33",
+          "span": "30x28",
           "col": 18,
-          "row": 135,
+          "row": 137,
           "tCol": 1,
           "tRow": 146,
           "tSpan": "48x20",
@@ -123,9 +124,9 @@
           "id": "block_1783209244948",
           "label": "NUEVO BLOQUE",
           "type": "image",
-          "span": "24x30",
+          "span": "24x28",
           "col": 1,
-          "row": 42,
+          "row": 43,
           "tCol": 1,
           "tRow": 182,
           "tSpan": "48x20",
@@ -180,9 +181,9 @@
           "id": "block_1783217789711",
           "label": "NUEVO BLOQUE",
           "type": "image",
-          "span": "30x33",
+          "span": "30x28",
           "col": 18,
-          "row": 172,
+          "row": 175,
           "tCol": 1,
           "tRow": 192,
           "tSpan": "48x20",
@@ -195,16 +196,16 @@
           "shadow": "none",
           "textAlign": "center",
           "gallery": [
-            "https://xgdmyjzyejjmwdqkufhp.supabase.co/storage/v1/object/public/imagenes-marketing/asset-final-1776356057554.jpg"
+            "https://xgdmyjzyejjmwdqkufhp.supabase.co/storage/v1/object/public/imagenes-marketing/grilla/INSUMO-1783998134637-0.webp"
           ],
-          "image": "https://xgdmyjzyejjmwdqkufhp.supabase.co/storage/v1/object/public/imagenes-marketing/asset-final-1776356057554.jpg"
+          "image": "https://xgdmyjzyejjmwdqkufhp.supabase.co/storage/v1/object/public/imagenes-marketing/grilla/INSUMO-1783998134637-0.webp"
         },
         {
           "id": "block_1783218197101",
           "label": "NUEVO BLOQUE",
           "type": "text",
           "span": "15x28",
-          "col": 1,
+          "col": 2,
           "row": 175,
           "tCol": 1,
           "tRow": 208,
