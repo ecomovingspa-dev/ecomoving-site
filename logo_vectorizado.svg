@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 650 350" width="100%" height="100%">
+  <defs>
+    <!-- Estilos para asegurar que las tipografías se rendericen correctamente -->
+    <style>
+      .text-top {
+        font-family: 'Arial', 'Helvetica', sans-serif;
+        font-size: 19px;
+        font-weight: bold;
+        fill: #000000;
+        letter-spacing: 0.5px;
+      }
+      .text-bottom {
+        font-family: 'Arial', 'Helvetica', sans-serif;
+        font-size: 26px;
+        font-weight: 500;
+        fill: #000000;
+        letter-spacing: 0.5px;
+      }
+      .text-equipo {
+        font-family: 'Arial Black', 'Impact', 'Arial', sans-serif;
+        font-size: 34px;
+        font-weight: 900;
+        fill: #008000;
+        letter-spacing: -1px;
+      }
+      .text-rural {
+        font-family: 'Arial Black', 'Impact', 'Arial', sans-serif;
+        font-size: 110px;
+        font-weight: 900;
+        fill: #000080;
+        letter-spacing: -3px;
+      }
+      .green-fill {
+        fill: #008000;
+      }
+      .blue-fill {
+        fill: #000080;
+      }
+    </style>
+  </defs>
+
+  <!-- Fondo transparente -->
+
+
+  <g transform="translate(45, 40)">
+    <!-- Texto Superior: DEPTO. DE SALUD E HIGIENE AMBIENTAL -->
+    <text x="15" y="45" class="text-top">DEPTO. DE SALUD E HIGIENE AMBIENTAL</text>
+
+    <!-- Simbolo ES Monograma -->
+    <!-- Barra superior verde del E -->
+    <rect x="15" y="65" width="120" height="34" class="green-fill" />
+    
+    <!-- Barra del medio azul del E -->
+    <rect x="15" y="109" width="105" height="34" class="blue-fill" />
+
+    <!-- Barra inferior verde y cinta curva (S) -->
+    <!-- 
+      Comienza en el extremo izquierdo de la barra inferior (15, 153),
+      va a la derecha hasta 150,
+      hace una curva hacia arriba (borde exterior radio 54, borde interior radio 20)
+      sube verticalmente entre x=150 y x=204
+      hace una curva hacia la derecha en la parte superior
+      y termina horizontalmente.
+    -->
+    <path d="
+      M 15,153 
+      L 150,153 
+      A 20,20 0 0,0 170,133 
+      L 170,99 
+      A 34,34 0 0,1 204,65 
+      L 255,65 
+      L 255,99 
+      L 204,99 
+      A 0,0 0 0,0 204,99 
+      L 204,133 
+      A 54,54 0 0,1 150,187 
+      L 15,187 
+      Z" 
+      class="green-fill" />
+
+    <!-- Texto EQUIPO SALUD (Verde) -->
+    <text x="265" y="96" class="text-equipo">EQUIPO SALUD</text>
+
+    <!-- Texto RURAL (Azul) -->
+    <text x="215" y="187" class="text-rural">RURAL</text>
+
+    <!-- Texto Inferior: I. MUNICIPALIDAD DE OVALLE -->
+    <text x="35" y="240" class="text-bottom">I. MUNICIPALIDAD DE OVALLE</text>
+  </g>
+</svg>
