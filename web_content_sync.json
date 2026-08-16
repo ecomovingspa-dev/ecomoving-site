@@ -23,28 +23,28 @@
           "id": "block_1773667993456",
           "label": "DRINKWARE",
           "blockTitle": "DRINKWARE DE ALTA GAMA",
-          "image": "https://xgdmyjzyejjmwdqkufhp.supabase.co/storage/v1/object/public/imagenes-marketing/grilla/INSUMO-1786045145250-0.webp",
+          "image": "/grilla/INSUMO-1786045145250-0.webp",
           "span": "22x35",
           "col": 1,
           "row": 2,
           "zIndex": 10,
           "borderRadius": "19px",
           "gallery": [
-            "https://xgdmyjzyejjmwdqkufhp.supabase.co/storage/v1/object/public/imagenes-marketing/grilla/INSUMO-1786045145250-0.webp"
+            "/grilla/INSUMO-1786045145250-0.webp"
           ]
         },
         {
           "id": "block_1773616332957",
           "label": "MUGS",
           "blockTitle": "MUGS DE LUJO",
-          "image": "https://xgdmyjzyejjmwdqkufhp.supabase.co/storage/v1/object/public/imagenes-marketing/grilla/INSUMO-1786047084286-0.webp",
+          "image": "/grilla/INSUMO-1786047084286-0.webp",
           "span": "26x32",
           "col": 25,
           "row": 41,
           "zIndex": 10,
           "borderRadius": "19px",
           "gallery": [
-            "https://xgdmyjzyejjmwdqkufhp.supabase.co/storage/v1/object/public/imagenes-marketing/grilla/INSUMO-1786047084286-0.webp"
+            "/grilla/INSUMO-1786047084286-0.webp"
           ]
         },
         {
@@ -52,7 +52,7 @@
           "label": "NUEVO BLOQUE",
           "blockTitle": "Libreta Ejecutiva & Eco Hybrid",
           "blockParagraph": "Grandes ideas merecen la mejor presentación.\nRedefine la papelería corporativa con una línea de libretas que combina arquitectura visual contemporánea y texturas de alto valor percibido. Diseñadas para reuniones directivas, presentaciones de proyectos y regalos ejecutivos de alto impacto, estas libretas integran la calidez del corcho, la sobriedad del cuero sintético y el carácter orgánico del bambú en un formato moderno y funcional.",
-          "image": "https://xgdmyjzyejjmwdqkufhp.supabase.co/storage/v1/object/public/imagenes-marketing/grilla/INSUMO-1786048688835-0.webp",
+          "image": "/grilla/INSUMO-1786048688835-0.webp",
           "span": "55x52",
           "col": 1,
           "row": 79,
@@ -61,7 +61,7 @@
           "type": "both",
           "zIndex": 10,
           "gallery": [
-            "https://xgdmyjzyejjmwdqkufhp.supabase.co/storage/v1/object/public/imagenes-marketing/grilla/INSUMO-1786048688835-0.webp"
+            "/grilla/INSUMO-1786048688835-0.webp"
           ],
           "textAlign": "left",
           "fontWeight": "900",
@@ -117,9 +117,9 @@
           "shadow": "none",
           "textAlign": "center",
           "gallery": [
-            "https://xgdmyjzyejjmwdqkufhp.supabase.co/storage/v1/object/public/imagenes-marketing/grilla/INSUMO-1786049986488-0.webp"
+            "/grilla/INSUMO-1786049986488-0.webp"
           ],
-          "image": "https://xgdmyjzyejjmwdqkufhp.supabase.co/storage/v1/object/public/imagenes-marketing/grilla/INSUMO-1786049986488-0.webp"
+          "image": "/grilla/INSUMO-1786049986488-0.webp"
         },
         {
           "id": "block_1783209244948",
@@ -199,9 +199,9 @@
           "shadow": "none",
           "textAlign": "center",
           "gallery": [
-            "https://xgdmyjzyejjmwdqkufhp.supabase.co/storage/v1/object/public/imagenes-marketing/grilla/INSUMO-1783998134637-0.webp"
+            "/grilla/INSUMO-1783998134637-0.webp"
           ],
-          "image": "https://xgdmyjzyejjmwdqkufhp.supabase.co/storage/v1/object/public/imagenes-marketing/grilla/INSUMO-1783998134637-0.webp"
+          "image": "/grilla/INSUMO-1783998134637-0.webp"
         },
         {
           "id": "block_1783218197101",
@@ -248,9 +248,9 @@
           "shadow": "none",
           "textAlign": "center",
           "gallery": [
-            "https://xgdmyjzyejjmwdqkufhp.supabase.co/storage/v1/object/public/imagenes-marketing/grilla/INSUMO-1783258216390-0.webp"
+            "/grilla/INSUMO-1783258216390-0.webp"
           ],
-          "image": "https://xgdmyjzyejjmwdqkufhp.supabase.co/storage/v1/object/public/imagenes-marketing/grilla/INSUMO-1783258216390-0.webp"
+          "image": "/grilla/INSUMO-1783258216390-0.webp"
         },
         {
           "id": "block_1783257835026",
@@ -271,15 +271,15 @@
           "shadow": "none",
           "textAlign": "center",
           "gallery": [
-            "https://xgdmyjzyejjmwdqkufhp.supabase.co/storage/v1/object/public/imagenes-marketing/grilla/INSUMO-1783258019698-0.webp"
+            "/grilla/INSUMO-1783258019698-0.webp"
           ],
-          "image": "https://xgdmyjzyejjmwdqkufhp.supabase.co/storage/v1/object/public/imagenes-marketing/grilla/INSUMO-1783258019698-0.webp"
+          "image": "/grilla/INSUMO-1783258019698-0.webp"
         },
         {
           "id": "block_1783257837387",
           "label": "NUEVO BLOQUE",
           "type": "image",
-          "span": "14x23",
+          "span": "14x13",
           "col": 34,
           "row": 210,
           "tCol": 1,
@@ -294,9 +294,9 @@
           "shadow": "none",
           "textAlign": "center",
           "gallery": [
-            "https://xgdmyjzyejjmwdqkufhp.supabase.co/storage/v1/object/public/imagenes-marketing/grilla/INSUMO-1783258239077-0.webp"
+            "/grilla/INSUMO-1786047084286-0.webp"
           ],
-          "image": "https://xgdmyjzyejjmwdqkufhp.supabase.co/storage/v1/object/public/imagenes-marketing/grilla/INSUMO-1783258239077-0.webp"
+          "image": "/grilla/INSUMO-1786047084286-0.webp"
         }
       ],
       "bgColor": "#000000"
