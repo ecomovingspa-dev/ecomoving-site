@@ -20,9 +20,6 @@ const resolveImageUrl = (img: string, projectPath?: string) => {
   if (projectPath && img.startsWith('/')) {
     if (img.startsWith('/api/local-asset')) return img;
     const normalizedPath = projectPath.replace(/\\/g, '/');
-    if (normalizedPath.toLowerCase().includes('ecomoving-site')) {
-      return img;
-    }
     return `/api/local-asset?path=${encodeURIComponent(normalizedPath + '/public' + img)}`;
   }
   return img;
