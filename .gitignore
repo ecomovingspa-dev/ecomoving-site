@@ -29,5 +29,5 @@ out/
 *.tsbuildinfo
 
 # Local sync content
-web_content_sync.json
-public/web_content_sync.json
+# Tracked in git for serverless/static deploy
+
