@@ -1,7 +1,7 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const defaultUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const defaultKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const defaultUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder-url.supabase.co';
+const defaultKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key';
 
 const defaultClient = createClient(defaultUrl, defaultKey);
 
